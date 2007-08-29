@@ -1,0 +1,75 @@
+So I go to some directory . and in there I create a directory src
+and a Makefile.am containing
+
+SUBDIRS = src
+
+then in my src directory I create my testprog.c code
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdio.h>
+
+int main (int argc, char **argv)
+{
+	int fd;
+	char c;
+
+	printf("Opening /dev/rddma...");
+	fd = open("/dev/rddma",O_RDWR);
+	if ( fd < 0 ) {
+		perror("failed");
+		return (0);
+	}
+	else
+		printf("OK\n");
+
+/* 	rddma_smb_create("fred"); */
+
+	scanf("%c", &c);
+	close(fd);
+	
+}
+
+and a Makefile.am containing
+
+bin_PROGRAMS = testprog
+
+so now I have the following directory structure
+
+.:
+total 2
+-rw-rw-r-- 1 phil phil   14 Jun 26 09:15 Makefile.am
+drwxrwxr-x 2 phil phil 1024 Jul 13 15:05 src
+
+./src:
+total 2
+-rw-rw-r-- 1 phil phil  23 Jun 26 09:02 Makefile.am
+-rwxrwSrwt 1 phil phil 352 Jul  2 10:19 testprog.c
+
+OK, so now issue the following command in the top level directory .
+
+touch README ChangeLog AUTHORS NEWS
+
+Then its autoscan which will generate you a configure.scan file.
+Edit this as follows and save it as configure.ac 
+
+--- configure.scan	2007-07-13 15:20:35.000000000 -0700
++++ configure.ac	2007-07-13 15:23:23.000000000 -0700
+@@ -2,7 +2,8 @@
+ # Process this file with autoconf to produce a configure script.
+ 
+ AC_PREREQ(2.59)
+-AC_INIT(FULL-PACKAGE-NAME, VERSION, BUG-REPORT-ADDRESS)
++AC_INIT([rddma_userland], [0.1], [Phil Terry <pterry@micromemory.com>])
++AM_INIT_AUTOMAKE
+ AC_CONFIG_SRCDIR([src/testprog.c])
+ AC_CONFIG_HEADER([config.h])
+ 
+Now run autoreconf -i
+
+Now run ./configure
+
+Now run ./make distcheck
+
+Voila this tarball

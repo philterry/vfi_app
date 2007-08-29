@@ -1,0 +1,9 @@
+2007-08-03  Phil Terry  <pterry@micromemory.com>
+
+	* src/testprog.c (main): added stuff to make it a write read command interface to /dev/rddma
+
+2007-07-13  Phil Terry  <pterry@micromemory.com>
+
+	* README: Added the descriptions of how to generate the whole
+	shebang from a simple testprog source.
+
