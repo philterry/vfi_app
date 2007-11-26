@@ -1,9 +1,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
+static unsigned long xtol (char *str);
 
 int main (int argc, char **argv)
 {
@@ -32,8 +35,88 @@ int main (int argc, char **argv)
 
  	fscanf(file,"%a[^\n]", &output); 
 	printf("\"%s\"\n",output);
+	
+	
+	/*
+	* If the request was "smb_mmap" then use the reply
+	* to mmap the region we asked for.
+	*/
+	if (strcasestr (argv[1], "smb_mmap")) {
+		/*
+		* The reply ought to contain an "mmap_offset=<x>" term, 
+		* where <x> is the offset, in hex, that we need to use
+		* with actual mmap calls to map the target area.
+		*/
+		char *tid_s = strcasestr (output, "mmap_offset=");
+		if (tid_s) {
+			void* mapping;
+			unsigned long t_id = xtol (tid_s + 12);
+			printf ("mmap... %08lx\n", t_id);
+			/*
+			* Mmap the region and, for giggles, erase its
+			* contents.
+			*
+			*/
+			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, fd, t_id);
+			printf ("mmaped to %p\n", mapping);
+			if (mapping && (~((size_t)mapping))) memset (mapping, 0, 512);
+		}
+	}
+	
  	free(output); 
 
 	close(fd);
 	
 }
+
+/**
+* xtol - convert hex string to long integer
+*
+* @str: string to convert.
+*
+* This function converts hex digits at a specified string into an unsigned long.
+* It is quite primitive, and will keep converting until the string exhausts or
+* some non-hex character is encountered. It doesn't check the answer; it just 
+* doesn't care. It *will* allow a leading "0x".
+*
+* I'm sure there is already a perfectly good C-library function that does exactly
+* thins, but I can't find one and I'm buggered if I can remember what it might 
+* be called.
+*
+**/
+static unsigned long xtol (char *str)
+{
+	unsigned long rslt = 0;
+	int cpos = 0;
+	for (cpos = 0;*str != (char)NULL; str += 1, cpos += 1) {
+		switch (*str) {
+		case '0' ... '9':
+			rslt = (rslt << 4) | (*str - '0');
+			break;
+		case 'a' ... 'f':
+			rslt = (rslt << 4) | (10 + (*str - 'a'));
+			break;
+		case 'A' ... 'F':
+			rslt = (rslt << 4) | (10 + (*str - 'A'));
+			break;
+		
+		/*
+		* We'll ignore an 'x' if it is part of "0x". 
+		* Otherwise treat it like any other non-hex
+		* character.
+		*/
+		case 'x': case 'X':
+			if (!rslt && cpos == 1) continue;
+			  
+		/*
+		* Non-hex characters are all seen as terminators.
+		* Return with whatever we've collected so far.
+		*/
+		default:
+			return (rslt);
+		}
+	}
+	return (rslt);
+}
+
+

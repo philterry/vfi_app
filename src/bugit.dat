@@ -1,0 +1,7 @@
+#!/bin/bash
+
+testprog location_create://fred?default_ops=private
+testprog smb_create://buf1.fred:1000
+testprog smb_create://buf2.fred:2000
+testprog xfer_create://tran1.fred:800/buf2.fred#1000=buf1.fred#800
+
