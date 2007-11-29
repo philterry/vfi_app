@@ -1,1 +1,1 @@
-bin_PROGRAMS = testprog
+bin_PROGRAMS = testprog testprog_async

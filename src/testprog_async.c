@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -5,7 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#define _GNU_SOURCE
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/signal.h>
@@ -167,49 +167,13 @@ int main (int argc, char **argv)
 *
 * @str: string to convert.
 *
-* This function converts hex digits at a specified string into an unsigned long.
-* It is quite primitive, and will keep converting until the string exhausts or
-* some non-hex character is encountered. It doesn't check the answer; it just 
-* doesn't care. It *will* allow a leading "0x".
-*
-* I'm sure there is already a perfectly good C-library function that does exactly
-* thins, but I can't find one and I'm buggered if I can remember what it might 
-* be called.
+* This function converts hex digits at a specified string into an
+* unsigned long using the perfectly useful strtol
 *
 **/
 static unsigned long xtol (char *str)
 {
-	unsigned long rslt = 0;
-	int cpos = 0;
-	for (cpos = 0;*str != (char)NULL; str += 1, cpos += 1) {
-		switch (*str) {
-		case '0' ... '9':
-			rslt = (rslt << 4) | (*str - '0');
-			break;
-		case 'a' ... 'f':
-			rslt = (rslt << 4) | (10 + (*str - 'a'));
-			break;
-		case 'A' ... 'F':
-			rslt = (rslt << 4) | (10 + (*str - 'A'));
-			break;
-		
-		/*
-		* We'll ignore an 'x' if it is part of "0x". 
-		* Otherwise treat it like any other non-hex
-		* character.
-		*/
-		case 'x': case 'X':
-			if (!rslt && cpos == 1) continue;
-			  
-		/*
-		* Non-hex characters are all seen as terminators.
-		* Return with whatever we've collected so far.
-		*/
-		default:
-			return (rslt);
-		}
-	}
-	return (rslt);
+	return strtol(str,0,16);
 }
 
 

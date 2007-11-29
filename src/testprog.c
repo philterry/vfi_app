@@ -1,3 +1,4 @@
+#define _GNU_SOURCE 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -86,37 +87,7 @@ int main (int argc, char **argv)
 **/
 static unsigned long xtol (char *str)
 {
-	unsigned long rslt = 0;
-	int cpos = 0;
-	for (cpos = 0;*str != (char)NULL; str += 1, cpos += 1) {
-		switch (*str) {
-		case '0' ... '9':
-			rslt = (rslt << 4) | (*str - '0');
-			break;
-		case 'a' ... 'f':
-			rslt = (rslt << 4) | (10 + (*str - 'a'));
-			break;
-		case 'A' ... 'F':
-			rslt = (rslt << 4) | (10 + (*str - 'A'));
-			break;
-		
-		/*
-		* We'll ignore an 'x' if it is part of "0x". 
-		* Otherwise treat it like any other non-hex
-		* character.
-		*/
-		case 'x': case 'X':
-			if (!rslt && cpos == 1) continue;
-			  
-		/*
-		* Non-hex characters are all seen as terminators.
-		* Return with whatever we've collected so far.
-		*/
-		default:
-			return (rslt);
-		}
-	}
-	return (rslt);
+	return strtol(str,0,16);
 }
 
 

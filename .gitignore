@@ -15,4 +15,6 @@ config.status
 src/Makefile
 src/testprog
 src/testprog.o
+src/testprog_async
+src/testprog_async.o
 stamp-h1
