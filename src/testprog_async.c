@@ -30,13 +30,13 @@ void asyio_prep_pwrite(struct iocb *iocb, int fd, void const *buf, int nr_segs,
 	iocb->aio_fildes = fd;
 	iocb->aio_lio_opcode = IOCB_CMD_PWRITE;
 	iocb->aio_reqprio = 0;
-	iocb->aio_buf = (u_int64_t) buf;
+	iocb->aio_buf = (u_int64_t) (unsigned long) buf;
 	iocb->aio_nbytes = nr_segs;
 #if 0
 	iocb->aio_offset = offset;
 #else
 	/* Address of string for rddma reply */
-	iocb->aio_offset = (u_int64_t) malloc(256);
+	iocb->aio_offset = (u_int64_t) (unsigned long) malloc(256);
 #endif
 	iocb->aio_flags = IOCB_FLAG_RESFD;
 	iocb->aio_resfd = afd;
@@ -125,7 +125,6 @@ int main (int argc, char **argv)
 		printf("Problem with io_getevents\n");
 
 	output = (char *) events[0].res2;
-	printf("Done: %s \n",output);
 	
 	
 	/*
