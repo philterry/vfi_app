@@ -2,18 +2,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-#include <fcntl.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/syscall.h>
-#include <sys/types.h>
-#include <sys/signal.h>
 #include <sys/time.h>
 #include <sys/uio.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <signal.h>
 #include <poll.h>
@@ -108,12 +102,14 @@ int main (int argc, char **argv)
 
 	/* Do it */
 	printf("Writing \"%s\" to /dev/rddma...",argv[1]);
+	fflush(stdout);
 	if (io_submit(ctx, 1, &iocb) <= 0) {
 		perror("io_submit");
 		return -1;
 	}
 
 	fprintf(stdout, "waiting ... ");
+	fflush(stdout);
 	/* second arg is wait time in msec, -1 is forever */
 	waitasync(afd, -1);
 
@@ -124,8 +120,8 @@ int main (int argc, char **argv)
 	if (r != 1)
 		printf("Problem with io_getevents\n");
 
-	output = (char *) events[0].res2;
-	
+	output = (char *) (unsigned long)events[0].res2;
+	printf("reply = %s\n", output);
 	
 	/*
 	* If the request was "smb_mmap" then use the reply
