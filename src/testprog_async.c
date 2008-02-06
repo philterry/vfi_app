@@ -1,70 +1,9 @@
-#define _GNU_SOURCE
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/syscall.h>
-#include <sys/time.h>
-#include <sys/uio.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <signal.h>
-#include <poll.h>
-#include <fcntl.h>
-#include <time.h>
-#include <errno.h>
-#include "./aio_user.h"
-
-
-void asyio_prep_pwrite(struct iocb *iocb, int fd, void const *buf, int nr_segs,
-		       int64_t offset, int afd)
-{
-	memset(iocb, 0, sizeof(*iocb));
-	iocb->aio_fildes = fd;
-	iocb->aio_lio_opcode = IOCB_CMD_PWRITE;
-	iocb->aio_reqprio = 0;
-	iocb->aio_buf = (u_int64_t) (unsigned long) buf;
-	iocb->aio_nbytes = nr_segs;
-#if 0
-	iocb->aio_offset = offset;
-#else
-	/* Address of string for rddma reply */
-	iocb->aio_offset = (u_int64_t) (unsigned long) malloc(256);
-#endif
-	iocb->aio_flags = IOCB_FLAG_RESFD;
-	iocb->aio_resfd = afd;
-}
-
-
-long waitasync(int afd, int timeo) {
-	struct pollfd pfd;
-
-	pfd.fd = afd;
-	pfd.events = POLLIN;
-	pfd.revents = 0;
-	if (poll(&pfd, 1, timeo) < 0) {
-		perror("poll");
-		return -1;
-	}
-	if ((pfd.revents & POLLIN) == 0) {
-		fprintf(stderr, "no results completed\n");
-		return 0;
-	}
-
-	return 1;
-}
-
-static inline unsigned long xtol (char *str)
-{
-	return strtol(str,0,16);
-}
+#include <rddma_api.h>
 
 int main (int argc, char **argv)
 {
-	int fd;
 	int afd;
-	FILE *file;
+	struct rddma_dev *dev;
 	struct iocb *iocb;
 	static struct io_event events[1];
 	aio_context_t ctx = 0;
@@ -80,18 +19,11 @@ int main (int argc, char **argv)
 	}
 	fcntl(afd, F_SETFL, fcntl(afd, F_GETFL, 0) | O_NONBLOCK);
 
-	printf("Opening /dev/rddma...");
-	fd = open("/dev/rddma",O_RDWR);
-	if ( fd < 0 ) {
-		perror("failed");
-		return (0);
-	}
-	else
-		printf("OK\n");
+	dev = rddma_open();
 
 	/* Prepare asynchronous I/O request */
 	iocb = malloc(sizeof(struct iocb));
-	asyio_prep_pwrite(iocb, fd, argv[1], 1 + strlen(argv[1]),
+	asyio_prep_pwrite(iocb, dev->fd, argv[1], 1 + strlen(argv[1]),
 		  0, afd);
 	iocb->aio_data = (u_int64_t) 0x5354;  /* dummy value for now */
 
@@ -104,15 +36,11 @@ int main (int argc, char **argv)
 	}
 
 	/* Do it */
-	printf("Writing \"%s\" to /dev/rddma...",argv[1]);
-	fflush(stdout);
 	if (io_submit(ctx, 1, &iocb) <= 0) {
 		perror("io_submit");
 		return -1;
 	}
 
-	fprintf(stdout, "waiting ... ");
-	fflush(stdout);
 	/* second arg is wait time in msec, -1 is forever */
 	waitasync(afd, -1);
 
@@ -130,23 +58,23 @@ int main (int argc, char **argv)
 	* If the request was "smb_mmap" then use the reply
 	* to mmap the region we asked for.
 	*/
-	if (strcasestr (argv[1], "smb_mmap")) {
+	if (strstr (argv[1], "smb_mmap://")) {
 		/*
 		* The reply ought to contain an "mmap_offset=<x>" term, 
 		* where <x> is the offset, in hex, that we need to use
 		* with actual mmap calls to map the target area.
 		*/
-		char *tid_s = strcasestr (output, "mmap_offset=");
+		char *tid_s = strstr (output, "mmap_offset(");
 		if (tid_s) {
 			void* mapping;
-			unsigned long t_id = xtol (tid_s + 12);
+			unsigned long t_id = strtol (tid_s + 12,0,16);
 			printf ("mmap... %08lx\n", t_id);
 			/*
 			* Mmap the region and, for giggles, erase its
 			* contents.
 			*
 			*/
-			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, fd, t_id);
+			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
 			printf ("mmaped to %p\n", mapping);
 			if (mapping && (~((size_t)mapping))) memset (mapping, 0, 512);
 		}
@@ -156,7 +84,7 @@ int main (int argc, char **argv)
  	free(iocb); 
 	io_destroy(ctx);
 	close(afd);
-	close(fd);
+	rddma_close(dev);
 	
 }
 
