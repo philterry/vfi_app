@@ -133,7 +133,7 @@ int main (int argc, char **argv)
 		* where <x> is the offset, in hex, that we need to use
 		* with actual mmap calls to map the target area.
 		*/
-		char *tid_s = strcasestr (output, "mmap_offset=");
+		char *tid_s = strcasestr (output, "mmap_offset(");
 		if (tid_s) {
 			void* mapping;
 			unsigned long t_id = xtol (tid_s + 12);
