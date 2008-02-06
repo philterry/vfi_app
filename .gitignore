@@ -9,7 +9,7 @@ missing
 src/Makefile.in
 Makefile
 config.h
-config.log
+*.log
 config.status
 .deps
 src/Makefile
