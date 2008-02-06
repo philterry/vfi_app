@@ -7,87 +7,96 @@
 #include <string.h>
 #include <stdlib.h>
 
-static unsigned long xtol (char *str);
+struct rddma_dev {
+	int fd;
+	FILE *file;
+};
+
+struct rddma_dev *rddma_open()
+{
+	struct rddma_dev *dev = malloc(sizeof(struct rddma_dev));
+
+	dev->fd = open("/dev/rddma",O_RDWR);
+
+	if ( dev->fd < 0 ) {
+		perror("failed");
+		free(dev);
+		return (0);
+	}
+
+	dev->file = fdopen(dev->fd,"r+");
+
+	return dev;
+}
+
+void rddma_close(struct rddma_dev *dev)
+{
+	close(dev->fd);
+	free(dev);
+}
+
+
+char *rddma_call(struct rddma_dev *dev, char *cmd)
+{
+	char *output = NULL;
+	fprintf(dev->file,"%s\n",cmd);
+	fflush(dev->file);
+ 	fscanf(dev->file,"%a[^\n]", &output); 
+	return output;
+}
+
+long rddma_get_hex_option(char *str, char *name)
+{
+	char *opt;
+	char *val;
+	if ((opt = strstr(str,name)))
+		if ((val = strstr(opt,"(")))
+			return strtol(val,0,16);
+	return 0;
+}
 
 int main (int argc, char **argv)
 {
-	int fd;
-	FILE *file;
-
+	int result;
 	char *output;
+	struct rddma_dev *dev;
 
-	printf("Opening /dev/rddma...");
-	fd = open("/dev/rddma",O_RDWR);
-	if ( fd < 0 ) {
-		perror("failed");
-		return (0);
-	}
-	else
-		printf("OK\n");
+	dev = rddma_open();
 
-	file = fdopen(fd,"r+");
+	output = rddma_call(dev,argv[1]);
 
-	printf("Writing \"%s\" to /dev/rddma...",argv[1]);
-	fprintf(file,"%s\n",argv[1]);
-	fflush(file);
-	printf("Done\n");
-	
-	printf("Reading /dev/rddma\n");
-
- 	fscanf(file,"%a[^\n]", &output); 
-	printf("\"%s\"\n",output);
-	
-	
 	/*
 	* If the request was "smb_mmap" then use the reply
 	* to mmap the region we asked for.
 	*/
-	if (strcasestr (argv[1], "smb_mmap")) {
+	if (strcasestr (argv[1], "smb_mmap://")) {
 		/*
 		* The reply ought to contain an "mmap_offset=<x>" term, 
 		* where <x> is the offset, in hex, that we need to use
 		* with actual mmap calls to map the target area.
 		*/
-		char *tid_s = strcasestr (output, "mmap_offset=");
-		if (tid_s) {
+		unsigned long t_id = rddma_get_hex_option(output,"mmap_offset");
+		if (t_id) {
 			void* mapping;
-			unsigned long t_id = xtol (tid_s + 12);
-			printf ("mmap... %08lx\n", t_id);
 			/*
 			* Mmap the region and, for giggles, erase its
 			* contents.
 			*
 			*/
-			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, fd, t_id);
-			printf ("mmaped to %p\n", mapping);
+			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
 			if (mapping && (~((size_t)mapping))) memset (mapping, 0, 512);
 		}
 	}
 	
+	
+	sscanf(strstr(output,"result("),"result(%d)",&result);
+
  	free(output); 
 
-	close(fd);
+	rddma_close(dev);
 	
+	return result;
 }
 
-/**
-* xtol - convert hex string to long integer
-*
-* @str: string to convert.
-*
-* This function converts hex digits at a specified string into an unsigned long.
-* It is quite primitive, and will keep converting until the string exhausts or
-* some non-hex character is encountered. It doesn't check the answer; it just 
-* doesn't care. It *will* allow a leading "0x".
-*
-* I'm sure there is already a perfectly good C-library function that does exactly
-* thins, but I can't find one and I'm buggered if I can remember what it might 
-* be called.
-*
-**/
-static unsigned long xtol (char *str)
-{
-	return strtol(str,0,16);
-}
 
 

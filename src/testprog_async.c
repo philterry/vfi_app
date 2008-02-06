@@ -55,7 +55,10 @@ long waitasync(int afd, int timeo) {
 	return 1;
 }
 
-static unsigned long xtol (char *str);
+static inline unsigned long xtol (char *str)
+{
+	return strtol(str,0,16);
+}
 
 int main (int argc, char **argv)
 {
@@ -156,19 +159,4 @@ int main (int argc, char **argv)
 	close(fd);
 	
 }
-
-/**
-* xtol - convert hex string to long integer
-*
-* @str: string to convert.
-*
-* This function converts hex digits at a specified string into an
-* unsigned long using the perfectly useful strtol
-*
-**/
-static unsigned long xtol (char *str)
-{
-	return strtol(str,0,16);
-}
-
 
