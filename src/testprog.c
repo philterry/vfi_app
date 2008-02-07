@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
 
 static unsigned long xtol (char *str);
 
@@ -59,8 +60,17 @@ int main (int argc, char **argv)
 			*
 			*/
 			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, fd, t_id);
-			printf ("mmaped to %p\n", mapping);
-			if (mapping && (~((size_t)mapping))) memset (mapping, 0, 512);
+			if ((unsigned long) mapping == -1) {
+				perror("mmap failed");
+			}
+			else {
+				printf ("mmaped to %p\n", mapping);
+				printf("initialize first 512 bytes\n");
+				memset (mapping, 0, 512);
+			}
+		}
+		else {
+			printf("smb_mmap failed\n");
 		}
 	}
 	
