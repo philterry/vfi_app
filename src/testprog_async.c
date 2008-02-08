@@ -13,11 +13,10 @@ int main (int argc, char **argv)
 	char *output;
 
 	/* Initialize event fd */
-	if ((afd = eventfd(0)) == -1) {
+	if ((afd = rddma_get_eventfd(0)) < 0) {
 		perror("eventfd");
 		return 2;
 	}
-	fcntl(afd, F_SETFL, fcntl(afd, F_GETFL, 0) | O_NONBLOCK);
 
 	dev = rddma_open();
 
