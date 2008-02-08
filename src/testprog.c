@@ -6,7 +6,7 @@ int main (int argc, char **argv)
 	char *output;
 	struct rddma_dev *dev;
 
-	dev = rddma_open();
+	dev = rddma_open(NULL,0);
 
 	output = rddma_call(dev,argv[1]);
 

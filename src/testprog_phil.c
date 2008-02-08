@@ -13,6 +13,6 @@ int main (int argc, char **argv)
 	if ((efd = rddma_get_eventfd(0)) < 0)
 		return efd;
 
-	dev = rddma_open();
+	dev = rddma_open(NULL,0);
 
 }

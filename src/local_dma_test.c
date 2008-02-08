@@ -1,20 +1,10 @@
-#define _GNU_SOURCE 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
+#include <rddma_api.h>
 
 /* Simple example app using RDDMA.
 /* It creates 2 local SMBS, fills one with data, uses the 
  * DMA engine to copy one SMB to another, and compares
  * the source and destination SMB
  */
-int fd_rddma;
-FILE *fp_rddma;
 
 /* 
  * Build with DBG defined to echo strings sent to and received from RDDMA.
@@ -28,21 +18,13 @@ FILE *fp_rddma;
 #define fflush(x) fprintf(x,"\n")
 #endif
 
-/**
-* xtol - convert hex string to long integer
-**/
-static unsigned long xtol (char *str)
-{
-	return strtol(str,0,16);
-}
-
 /*
  * Extract the integer RDDMA return code from "result(n)"
  */
 int get_error_code(char *s) 
 {
 	int ret;
-	char *res = strcasestr (s, "result(");
+	char *res = strstr (s, "result(");
 #ifdef NOTARGET
 	return 0;
 #endif
@@ -55,7 +37,7 @@ int get_error_code(char *s)
 	return (ret);
 }
 
-int bind_create(char *name, char *loc, int len, 
+int bind_create(struct rddma_dev *dev, char *name, char *loc, int len, 
 	char *destname, char *destloc, int destoff, char *destevent,
 	char *srcname, char *srcloc, int srcoff, char *srcevent)
 {
@@ -116,10 +98,10 @@ bind_string_ready:
 #ifdef DBG
 	printf("%s\n", output);
 #endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
+	fprintf(dev->file,output);
+	fflush(dev->file);
 #ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
+ 	fscanf(dev->file,"%s", output); 
 #ifdef DBG
 	printf("%s\n", output);
 #endif
@@ -127,7 +109,7 @@ bind_string_ready:
 	return (get_error_code(output));
 }
 
-int event_start(char *name, char *loc, int wait)
+int event_start(struct rddma_dev *dev, char *name, char *loc, int wait)
 {
 	char output[1000];
 	sprintf(output,"event_start://%s", name);
@@ -140,10 +122,10 @@ int event_start(char *name, char *loc, int wait)
 #ifdef DBG
 	printf("%s\n", output);
 #endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
+	fprintf(dev->file,output);
+	fflush(dev->file);
 #ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
+ 	fscanf(dev->file,"%s", output); 
 #ifdef DBG
 	printf("%s\n", output);
 #endif
@@ -151,7 +133,7 @@ int event_start(char *name, char *loc, int wait)
 	return(get_error_code(output));
 }
 
-int xfer_create(char *name, char *loc)
+int xfer_create(struct rddma_dev *dev, char *name, char *loc)
 {
 	char output[1000];
 	sprintf(output,"xfer_create://%s", name);
@@ -164,10 +146,10 @@ int xfer_create(char *name, char *loc)
 #ifdef DBG
 	printf("%s\n", output);
 #endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
+	fprintf(dev->file,output);
+	fflush(dev->file);
 #ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
+ 	fscanf(dev->file,"%s", output); 
 #ifdef DBG
 	printf("%s\n", output);
 #endif
@@ -176,7 +158,7 @@ int xfer_create(char *name, char *loc)
 }
 
 /* Does the RDDMA smb_mmap, then call libc to actually do the mapping */
-int smb_mmap(char *name, char *loc, int offset, int len, void **buf) 
+int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, void **buf) 
 {
 	char output[1000];
 	char temp[8];
@@ -202,10 +184,10 @@ int smb_mmap(char *name, char *loc, int offset, int len, void **buf)
 #ifdef DBG
 	printf("%s\n", output);
 #endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
+	fprintf(dev->file,output);
+	fflush(dev->file);
 #ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
+ 	fscanf(dev->file,"%s", output); 
 #ifdef DBG
 	printf("%s\n", output);
 #endif
@@ -224,10 +206,10 @@ int smb_mmap(char *name, char *loc, int offset, int len, void **buf)
 	* where <x> is the offset, in hex, that we need to use
 	* with actual mmap calls to map the target area.
 	*/
-	tid_s = strcasestr (output, "mmap_offset(");
-	unsigned long t_id = xtol (tid_s + 12);
+	tid_s = strstr (output, "mmap_offset(");
+	unsigned long t_id = strtoul (tid_s + 12,0,16);
 	printf ("mmap... %08lx\n", t_id);
-	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, fd_rddma, t_id);
+	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
 	if ((unsigned long) mapping == -1) {
 		*buf == NULL;
 		perror("mmap failed");
@@ -240,7 +222,7 @@ int smb_mmap(char *name, char *loc, int offset, int len, void **buf)
  * if map==1, *buf is a pointer to the SMB.  Otherwise SMB will be created
  * but not accessible from userland.  
  */
-int smb_create(char *name, char *loc, int offset, int len, int map, void **buf) 
+int smb_create(struct rddma_dev *dev, char *name, char *loc, int offset, int len, int map, void **buf) 
 {
 	char output[1000];
 	char temp[8];
@@ -263,10 +245,10 @@ int smb_create(char *name, char *loc, int offset, int len, int map, void **buf)
 #ifdef DBG
 	printf("%s\n", output);
 #endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
+	fprintf(dev->file,output);
+	fflush(dev->file);
 #ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
+ 	fscanf(dev->file,"%s", output); 
 #ifdef DBG
 	printf("%s\n", output);
 #endif
@@ -278,7 +260,7 @@ int smb_create(char *name, char *loc, int offset, int len, int map, void **buf)
 		return 0;
 
 	/* SMB created, now mmap it */
-	return (smb_mmap(name, loc, offset, len, buf));
+	return (smb_mmap(dev,name, loc, offset, len, buf));
 }
 
 /* helper function for building location_create and location_find strings */
@@ -308,7 +290,7 @@ void add_opt(char *base, char *option)
 
 /* flags SYSROOT, SYSREMOTE, RIO_FABRIC, NET_FABRIC, RIO_DMA */
 /* Returns status code */
-int location_create(char *s, unsigned int flags, int node) 
+int location_create(struct rddma_dev *dev, char *s, unsigned int flags, int node) 
 {
 	char output[1000];
 	char temp[8];
@@ -359,10 +341,10 @@ int location_create(char *s, unsigned int flags, int node)
 #ifdef DBG
 	printf("%s\n", output);
 #endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
+	fprintf(dev->file,output);
+	fflush(dev->file);
 #ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
+ 	fscanf(dev->file,"%s", output); 
 #ifdef DBG
 	printf("reply=%s\n",output);
 #endif
@@ -375,8 +357,7 @@ int location_create(char *s, unsigned int flags, int node)
 /* Create 2 local SMBs, copy one to the other, and compare */
 int main (int argc, char **argv)
 {
-	int fd;
-	FILE *file;
+	struct rddma_dev *dev;
 	int failed = 0;
 	unsigned int *buf1;
 	unsigned int *buf2;
@@ -387,20 +368,18 @@ int main (int argc, char **argv)
 
 	printf("Opening /dev/rddma...");
 #ifdef NOTARGET
-	fd_rddma = open("junk",O_RDWR | O_CREAT);
+	dev = rddma_open("junk",O_RDWR | O_CREAT);
 #else
-	fd_rddma = open("/dev/rddma",O_RDWR);
+	dev = rddma_open("/dev/rddma",O_RDWR);
 #endif
-	if ( fd_rddma < 0 ) {
+	if ( dev == NULL ) {
 		perror("Unable to open /dev/rddma");
 		return (0);
 	}
 	else
 		printf("OK\n");
 
-	fp_rddma = fdopen(fd_rddma,"r+");
-
-	ret = location_create("fred12", PRIVATE_OPS | RIO_DMA | RIO_FABRIC, 0);
+	ret = location_create(dev,"fred12", PRIVATE_OPS | RIO_DMA | RIO_FABRIC, 0);
 	if (ret) {
 		printf("location_create failed\n");
 		goto done;
@@ -409,7 +388,7 @@ int main (int argc, char **argv)
 	/* Create and initialize 2 SMBs */
 
 	/* args: name, loc, offset, extent, map */
-	ret = smb_create("buf1", "fred12", 0, SMB_LEN, 1, (void **) &buf1);
+	ret = smb_create(dev,"buf1", "fred12", 0, SMB_LEN, 1, (void **) &buf1);
 	if (ret) {
 		printf("smb_create failed\n");
 		goto done;
@@ -418,7 +397,7 @@ int main (int argc, char **argv)
 		for (i = 0; i < SMB_LEN/4 ; i++)
 			buf1[i] = i;
 
-	ret = smb_create("buf2", "fred12", 0, SMB_LEN, 1, (void **) &buf2);
+	ret = smb_create(dev,"buf2", "fred12", 0, SMB_LEN, 1, (void **) &buf2);
 	if (ret) {
 		printf("smb_create failed\n");
 		goto done;
@@ -428,13 +407,13 @@ int main (int argc, char **argv)
 			buf2[i] = 0;
 
 	/* Define DMA engine */
-	ret = xfer_create("xf","fred12");
+	ret = xfer_create(dev,"xf","fred12");
 	if (ret) {
 		printf("xfer_create failed\n");
 		goto done;
 	}
 	/* Set up transfer */
-	ret = bind_create("xf","fred12", SMB_LEN,
+	ret = bind_create(dev,"xf","fred12", SMB_LEN,
 		"buf2", "fred12", 0, "s",		/* dest */
 		"buf1", "fred12", 0, "s");	/* src */
 	if (ret) {
@@ -445,7 +424,7 @@ int main (int argc, char **argv)
 	/* Run the DMA, only 1 event needed to start this test */
 	/* last arg is the wait flag...  block till DMA completes
 	 */
-	ret = event_start("s", "fred12", 1);
+	ret = event_start(dev,"s", "fred12", 1);
 	if (ret) {
 		printf("event_start failed\n");
 		goto done;
@@ -466,7 +445,6 @@ int main (int argc, char **argv)
 		printf("success!\n");
 	
 done:
-	fclose(fp_rddma);
-	close(fd_rddma);
+	rddma_close(dev);
 	
 }

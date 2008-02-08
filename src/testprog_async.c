@@ -18,7 +18,7 @@ int main (int argc, char **argv)
 		return 2;
 	}
 
-	dev = rddma_open();
+	dev = rddma_open(NULL,0);
 
 	/* Prepare asynchronous I/O request */
 	iocb = malloc(sizeof(struct iocb));
