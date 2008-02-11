@@ -339,8 +339,8 @@ int main (int argc, char **argv)
 	int fd;
 	FILE *file;
 	int failed = 0;
-	unsigned int *buf1;
-	unsigned int *buf2;
+	unsigned int *buf1=NULL;
+	unsigned int *buf2=NULL;
 	int i;
 	int ret;
 
@@ -427,6 +427,11 @@ int main (int argc, char **argv)
 		printf("success!\n");
 	
 done:
+	if (buf1)
+		munmap(buf1, SMB_LEN);
+	if (buf2)
+		munmap(buf2, SMB_LEN);
+	/* Add a bunch of rddma *_delete calls here... once they're fixed */
 	fclose(fp_rddma);
 	close(fd_rddma);
 	
