@@ -33,7 +33,7 @@ FILE *fp_rddma;
 **/
 static unsigned long xtol (char *str)
 {
-	return strtol(str,0,16);
+	return strtoul(str,0,16);
 }
 
 /*
