@@ -59,20 +59,19 @@ int main (int argc, char **argv)
 	*/
 	if (strstr (argv[1], "smb_mmap://")) {
 		/*
-		* The reply ought to contain an "mmap_offset=<x>" term, 
-		* where <x> is the offset, in hex, that we need to use
-		* with actual mmap calls to map the target area.
-		*/
-		char *tid_s = strstr (output, "mmap_offset(");
-		if (tid_s) {
+		 * The reply ought to contain an "mmap_offset=<x>" term, 
+		 * where <x> is the offset, in hex, that we need to use
+		 * with actual mmap calls to map the target area.
+		 */
+		unsigned long t_id = rddma_get_hex_option (output,"mmap_offset");
+		if (t_id) {
 			void* mapping;
-			unsigned long t_id = strtol (tid_s + 12,0,16);
 			printf ("mmap... %08lx\n", t_id);
 			/*
-			* Mmap the region and, for giggles, erase its
-			* contents.
-			*
-			*/
+			 * Mmap the region and, for giggles, erase its
+			 * contents.
+			 *
+			 */
 			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
 			printf ("mmaped to %p\n", mapping);
 			if (mapping && (~((size_t)mapping))) memset (mapping, 0, 512);

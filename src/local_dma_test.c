@@ -206,8 +206,7 @@ int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, 
 	* where <x> is the offset, in hex, that we need to use
 	* with actual mmap calls to map the target area.
 	*/
-	tid_s = strstr (output, "mmap_offset(");
-	unsigned long t_id = strtoul (tid_s + 12,0,16);
+	unsigned long t_id = rddma_get_hex_option (output, "mmap_offset");
 	printf ("mmap... %08lx\n", t_id);
 	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
 	if ((unsigned long) mapping == -1) {
