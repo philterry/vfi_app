@@ -55,6 +55,24 @@ int get_error_code(char *s)
 	return (ret);
 }
 
+/* Send string 'str' to rddma driver.
+ * The string will be overwritten by the reply from the driver.
+ */
+void execute_rddma_string(char *str)
+{
+#ifdef DBG
+	printf("%s\n", str);
+#endif
+	fprintf(fp_rddma,str);
+	fflush(fp_rddma);
+#ifndef NOTARGET
+ 	fscanf(fp_rddma,"%s", str); 
+#ifdef DBG
+	printf("reply = %s\n", str);
+#endif
+#endif
+}
+
 int bind_create(char *name, char *loc, int len, 
 	char *destname, char *destloc, int destoff, char *destevent,
 	char *srcname, char *srcloc, int srcoff, char *srcevent)
@@ -113,17 +131,7 @@ int bind_create(char *name, char *loc, int len,
 		strcat(output,temp);
 	}
 bind_string_ready:
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
-#ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-#endif
+	execute_rddma_string(output);
 	return (get_error_code(output));
 }
 
@@ -137,17 +145,7 @@ int event_start(char *name, char *loc, int wait)
 		strcat(output,loc);
 	}
 
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
-#ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-#endif
+	execute_rddma_string(output);
 	return(get_error_code(output));
 }
 
@@ -161,17 +159,7 @@ int xfer_create(char *name, char *loc)
 		strcat(output,loc);
 	}
 
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
-#ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-#endif
+	execute_rddma_string(output);
 	return (get_error_code(output));
 }
 
@@ -199,17 +187,8 @@ int smb_mmap(char *name, char *loc, int offset, int len, void **buf)
 		sprintf(temp,":%x",len);
 		strcat(output,temp);
 	}
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
-#ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-#endif
+
+	execute_rddma_string(output);
 	ret = get_error_code(output);
 	if (ret)
 		return (ret);
@@ -220,8 +199,8 @@ int smb_mmap(char *name, char *loc, int offset, int len, void **buf)
 
 	/* Buffer now mmap-able, go for it */
 	/*
-	* The reply ought to contain an "mmap_offset=<x>" term, 
-	* where <x> is the offset, in hex, that we need to use
+	* The reply ought to contain an "mmap_offset(x)" term, 
+	* where (x) is the offset, in hex, that we need to use
 	* with actual mmap calls to map the target area.
 	*/
 	tid_s = strcasestr (output, "mmap_offset(");
@@ -260,17 +239,8 @@ int smb_create(char *name, char *loc, int offset, int len, int map, void **buf)
 		sprintf(temp,":%x",len);
 		strcat(output,temp);
 	}
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
-#ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-#endif
+
+	execute_rddma_string(output);
 	ret = get_error_code(output);
 	if (ret)
 		return (ret);
@@ -356,17 +326,8 @@ int location_create(char *s, unsigned int flags, int node)
 			add_opt(output, "default_ops(public)");
 		}
 	}
-#ifdef DBG
-	printf("%s\n", output);
-#endif
-	fprintf(fp_rddma,output);
-	fflush(fp_rddma);
-#ifndef NOTARGET
- 	fscanf(fp_rddma,"%s", output); 
-#ifdef DBG
-	printf("reply=%s\n",output);
-#endif
-#endif
+
+	execute_rddma_string(output);
 	return (get_error_code(output));
 }
 
