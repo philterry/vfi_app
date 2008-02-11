@@ -9,7 +9,7 @@ missing
 src/Makefile.in
 Makefile
 config.h
-config.log
+*.log
 config.status
 .deps
 src/Makefile
@@ -17,4 +17,6 @@ src/testprog
 src/testprog.o
 src/testprog_async
 src/testprog_async.o
+src/local_dma_test
+src/local_dma_test.o
 stamp-h1
