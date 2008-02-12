@@ -431,7 +431,14 @@ done:
 		munmap(buf1, SMB_LEN);
 	if (buf2)
 		munmap(buf2, SMB_LEN);
+#if 0
 	/* Add a bunch of rddma *_delete calls here... once they're fixed */
+	xfer_delete("xf","fred12");  /* assumes xfer_delete gets rid of all binds */
+	event_delete("s","fred12");  /* ? */
+	smb_delete("buf2", "fred12");
+	smb_delete("buf1", "fred12");
+	location_delete("fred12");
+#endif
 	fclose(fp_rddma);
 	close(fd_rddma);
 	
