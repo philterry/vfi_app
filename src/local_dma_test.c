@@ -304,7 +304,7 @@ int location_create(char *s, unsigned int flags, int node)
 	}
 
 	if (node) {
-		sprintf(temp, "%d",node);
+		sprintf(temp, "#%d",node);
 		strcat (output, temp);
 	}
 
