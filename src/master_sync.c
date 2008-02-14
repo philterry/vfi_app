@@ -353,7 +353,6 @@ int location_find(char *name, unsigned int flags)
 	else if (flags & PUBLIC_OPS) {
 		add_opt(output, "default_ops(public)");
 	}
-printf("execute: %s\n", output);
 	execute_rddma_string(output);
 	return (get_error_code(output));
 }
