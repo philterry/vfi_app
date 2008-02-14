@@ -10,11 +10,6 @@
 #include <time.h>
 #include <unistd.h>
 
-/* Simple example app using RDDMA.
-/* It creates 2 local SMBS, fills one with data, uses the 
- * DMA engine to copy one SMB to another, and compares
- * the source and destination SMB
- */
 int fd_rddma;
 FILE *fp_rddma;
 
