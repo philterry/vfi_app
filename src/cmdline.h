@@ -29,7 +29,7 @@ extern "C" {
 #define CMDLINE_PARSER_VERSION VERSION
 #endif
 
-enum enum_mode { mode_arg_BO = 0 , mode_arg_NBO, mode_arg_NBOO };
+enum enum_mode { mode_arg_BO = 0 , mode_arg_NBO, mode_arg_NBIO, mode_arg_NBOO };
 
 /** @brief Where the command line options are stored */
 struct gengetopt_args_info

@@ -30,7 +30,7 @@ const char *gengetopt_args_info_description = "";
 const char *gengetopt_args_info_help[] = {
   "  -h, --help       Print help and exit",
   "  -V, --version    Print version and exit",
-  "  -m, --mode=ENUM  execution mode  (possible values=\"BO\", \"NBO\", \"NBOO\" \n                     default=`BO')",
+  "  -m, --mode=ENUM  execution mode  (possible values=\"BO\", \"NBO\", \"NBIO\", \n                     \"NBOO\" default=`BO')",
     0
 };
 
@@ -50,7 +50,7 @@ cmdline_parser_internal (int argc, char * const *argv, struct gengetopt_args_inf
 static int
 cmdline_parser_required2 (struct gengetopt_args_info *args_info, const char *prog_name, const char *additional_error);
 
-char *cmdline_parser_mode_values[] = {"BO", "NBO", "NBOO", 0} ;	/* Possible values for mode.  */
+char *cmdline_parser_mode_values[] = {"BO", "NBO", "NBIO", "NBOO", 0} ;	/* Possible values for mode.  */
 
 static char *
 gengetopt_strdup (const char *s);

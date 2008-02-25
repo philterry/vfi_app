@@ -1,5 +1,6 @@
 #include <rddma_api.h>
 #include <semaphore.h>
+#include <pthread.h>
 #include "cmdline.h"
 
 void fred(struct rddma_dev *dev, char *input, char *output)
@@ -98,7 +99,7 @@ int test_NBO(int np, char **p)
 	return result;
 }
 
-int test_NBOO(int np, char **p)
+int test_NBIO(int np, char **p)
 {
 	int i;
 	struct rddma_dev *dev;
@@ -106,7 +107,7 @@ int test_NBOO(int np, char **p)
 	int result = 0;
 	int timeout = -1;
 
-	printf("Non-Blocking Out of Order Mode\n");
+	printf("Non-Blocking Interleaved Ordered Mode\n");
 	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
 
 	for (i = 0; i < np && result; i++) {
@@ -136,6 +137,50 @@ int test_NBOO(int np, char **p)
 	return result;
 }
 
+void *thr_f(void *h)
+{
+	char *output;
+	int result;
+
+	result = rddma_get_async_handle(h,&output);
+	
+	sscanf(strstr(output,"result("),"result(%d)",&result);
+
+	printf("%s\n",output);
+
+	free(output); 
+	rddma_free_async_handle(h);
+}
+
+int test_NBOO(int np, char **p)
+{
+	int i;
+	struct rddma_dev *dev;
+	char *output;
+	int result = 0;
+	int timeout = -1;
+	void *h;
+	pthread_t tid;
+
+	printf("Non-Blocking Out of Order Mode\n");
+	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
+
+	for (i = 0; i < np; i++) {
+		printf ("inputs[%d]: %s\n ",i,p[i]);
+		h = rddma_alloc_async_handle();
+		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", p[i],h);
+		pthread_create(&tid,0,thr_f,(void *)h);
+	}
+
+	for (i = 0; i < np; i++) {
+		result = rddma_get_result_async(dev,timeout);
+	}
+
+	rddma_close(dev);
+	
+	return result;
+}
+
 int main (int argc, char **argv)
 {
 	int result;
@@ -154,6 +199,9 @@ int main (int argc, char **argv)
 		break;
 	case mode_arg_NBO:
 		result = test_NBO(opts.inputs_num,opts.inputs);
+		break;
+	case mode_arg_NBIO:
+		result = test_NBIO(opts.inputs_num,opts.inputs);
 		break;
 	case mode_arg_NBOO:
 		result = test_NBOO(opts.inputs_num,opts.inputs);
