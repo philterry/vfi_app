@@ -110,21 +110,15 @@ int test_NBOO(int np, char **p)
 	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
 
 	for (i = 0; i < np && result; i++) {
+		printf ("inputs[%d]: %s\n ",i,p[i]);
 
 		result = rddma_invoke_cmd(dev, "%s\n", p[i]);
 		if (result < 0)
 			break;
-
-		sscanf(strstr(output,"result("),"result(%d)",&result);
-
-		printf("%s\n",output);
-
-		free(output); 
 	}
 
 	if (result > 0)
 		for (i = 0; i < np && result; i++) {
-			printf ("inputs[%d]: %s\n\t -> ",i,p[i]);
 
 			result = rddma_get_result(dev,timeout,&output);
 			if (result < 0)
