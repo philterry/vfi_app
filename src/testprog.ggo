@@ -1,2 +1,2 @@
-args "--unamed-opts"
+args "--unamed-opts --default-optional"
 option "mode" m "execution mode" values="BO","NBO","NBIO","NBOO" default="BO" enum

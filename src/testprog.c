@@ -45,21 +45,22 @@ int test_BO(int np, char **p)
 	int i;
 	struct rddma_dev *dev;
 	char *output;
-	int result = 0;
+	int result = 1;
 
 	printf("Blocking Ordered Mode\n");
 	dev = rddma_open(NULL,0);
 
 	for (i = 0; i < np && result; i++) {
-		printf ("inputs[%d]: %s\n\t -> ",i,p[i]);
+		printf ("%s\n\t -> ",p[i]);
 
 		result = rddma_do_cmd(dev,&output, "%s\n", p[i]);
+
 		if (result < 0)
 			break;
 
 		sscanf(strstr(output,"result("),"result(%d)",&result);
 
-		printf("%s\n",output);
+		printf("%s\n",output);;
 
 		free(output); 
 	}
@@ -74,7 +75,7 @@ int test_NBO(int np, char **p)
 	int i;
 	struct rddma_dev *dev;
 	char *output;
-	int result = 0;
+	int result = 1;
 	int timeout = -1;
 
 	printf("Non-Blocking Ordered Mode\n");
@@ -104,8 +105,9 @@ int test_NBIO(int np, char **p)
 	int i;
 	struct rddma_dev *dev;
 	char *output;
-	int result = 0;
+	int result = 1;
 	int timeout = -1;
+	int count = 0;
 
 	printf("Non-Blocking Interleaved Ordered Mode\n");
 	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
@@ -116,21 +118,21 @@ int test_NBIO(int np, char **p)
 		result = rddma_invoke_cmd(dev, "%s\n", p[i]);
 		if (result < 0)
 			break;
+		count++;
 	}
+	result = 1;
+	for (i = 0; i < count && result; i++) {
 
-	if (result > 0)
-		for (i = 0; i < np && result; i++) {
+		result = rddma_get_result(dev,timeout,&output);
+		if (result < 0)
+			break;
 
-			result = rddma_get_result(dev,timeout,&output);
-			if (result < 0)
-				break;
+		sscanf(strstr(output,"result("),"result(%d)",&result);
 
-			sscanf(strstr(output,"result("),"result(%d)",&result);
+		printf("%s\n",output);
 
-			printf("%s\n",output);
-
-			free(output); 
-		}
+		free(output); 
+	}
 
 	rddma_close(dev);
 	
