@@ -12,12 +12,14 @@ AC_PROG_CC
 
 # Checks for libraries.
 AC_CHECK_LIB([rddma_api], [rddma_open])
+AC_CHECK_LIB([pthread],[sem_init])
 
 # Checks for header files.
 AC_CHECK_HEADERS([unistd.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
+AC_C_CONST
 AC_TYPE_SIZE_T
 
 # Checks for library functions.
