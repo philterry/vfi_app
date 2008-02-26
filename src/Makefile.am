@@ -11,3 +11,5 @@ local_dma_test_LDADD = -L/home/phil/vinstall/lib -lrddma_api -lpthread
 testprog_phil_LDADD = -L/home/phil/vinstall/lib -lrddma_api -lpthread
 
 INCLUDES = -I/home/phil/vinstall/include
+
+EXTRA_DIST = testprog.ggo
