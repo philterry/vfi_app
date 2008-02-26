@@ -82,7 +82,7 @@ int test_NBO(int np, char **p)
 	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
 
 	for (i = 0; i < np && result; i++) {
-		printf ("inputs[%d]: %s\n\t -> ",i,p[i]);
+		printf ("%s\n\t -> ",p[i]);
 
 		result = rddma_do_cmd_blk(dev,timeout,&output, "%s\n", p[i]);
 		if (result < 0)
@@ -129,9 +129,9 @@ int test_NBIO(int np, char **p)
 
 		sscanf(strstr(output,"result("),"result(%d)",&result);
 
-		printf("%s\n",output);
+		printf("%d:%s\n",result,output);
 
-		free(output); 
+		free(output);
 	}
 
 	rddma_close(dev);
