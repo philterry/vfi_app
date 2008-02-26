@@ -107,21 +107,16 @@ int test_NBIO(int np, char **p)
 	char *output;
 	int result = 1;
 	int timeout = -1;
-	int count = 0;
 
 	printf("Non-Blocking Interleaved Ordered Mode\n");
 	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
 
 	for (i = 0; i < np && result; i++) {
-		printf ("inputs[%d]: %s\n ",i,p[i]);
+		printf ("%s\n",p[i]);
 
 		result = rddma_invoke_cmd(dev, "%s\n", p[i]);
 		if (result < 0)
 			break;
-		count++;
-	}
-	result = 1;
-	for (i = 0; i < count && result; i++) {
 
 		result = rddma_get_result(dev,timeout,&output);
 		if (result < 0)
@@ -129,7 +124,7 @@ int test_NBIO(int np, char **p)
 
 		sscanf(strstr(output,"result("),"result(%d)",&result);
 
-		printf("%d:%s\n",result,output);
+		printf("%s\n",output);
 
 		free(output);
 	}
@@ -168,7 +163,7 @@ int test_NBOO(int np, char **p)
 	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
 
 	for (i = 0; i < np; i++) {
-		printf ("inputs[%d]: %s\n ",i,p[i]);
+		printf ("inputs[%d]: %s\n",i,p[i]);
 		h = rddma_alloc_async_handle();
 		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", p[i],h);
 		pthread_create(&tid,0,thr_f,(void *)h);
@@ -180,6 +175,49 @@ int test_NBOO(int np, char **p)
 
 	rddma_close(dev);
 	
+	return result;
+}
+
+int test_AIOE(int np, char **p)
+{
+	int i;
+	struct rddma_dev *dev;
+	char *output;
+	int result = 0;
+	int timeout = -1;
+	void *h;
+	pthread_t tid;
+
+	printf("Non-Blocking Out of Order Mode\n");
+	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
+
+	for (i = 0; i < np; i++) {
+		printf ("inputs[%d]: %s\n",i,p[i]);
+		h = rddma_alloc_async_handle();
+		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", p[i],h);
+		pthread_create(&tid,0,thr_f,(void *)h);
+	}
+
+	for (i = 0; i < np; i++) {
+		result = rddma_get_result_async(dev,timeout);
+	}
+
+	rddma_close(dev);
+	
+	return result;
+}
+int test_CRASH(int np, char **p)
+{
+	struct rddma_dev *dev;
+	int result = 1;
+	int i;
+
+	for (i=0;i<np && result;i++) {
+		dev = rddma_open(NULL,O_RDWR | O_NONBLOCK );
+		result = rddma_invoke_cmd(dev,"%s",p[i]);
+		rddma_close(dev);
+	}
+
 	return result;
 }
 
@@ -207,6 +245,12 @@ int main (int argc, char **argv)
 		break;
 	case mode_arg_NBOO:
 		result = test_NBOO(opts.inputs_num,opts.inputs);
+		break;
+	case mode_arg_AIOE:
+		result = test_AIOE(opts.inputs_num,opts.inputs);
+		break;
+	case mode_arg_CRASH:
+		result = test_CRASH(opts.inputs_num,opts.inputs);
 		break;
 	}
 	
