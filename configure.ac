@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([rddma_userland], [0.1], [Phil Terry <pterry@vmetro.com>])
+AC_INIT([testprog], [0.1], [Phil Terry <pterry@vmetro.com>])
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([src/testprog.c])
 AC_CONFIG_HEADER([config.h])
