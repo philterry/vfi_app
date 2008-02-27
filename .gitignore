@@ -1,5 +1,4 @@
 Makefile.in
-aclocal.m4
 autom4te.cache
 config.h.in
 configure
@@ -13,6 +12,7 @@ config.h
 *.log
 config.status
 .deps
+.libs
 src/Makefile
 src/testprog
 src/testprog.o

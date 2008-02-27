@@ -6,10 +6,13 @@ AC_INIT([testprog], [0.1], [Phil Terry <pterry@vmetro.com>])
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([src/testprog.c])
 AC_CONFIG_HEADER([config.h])
+AC_PROG_LIBTOOL
 
 # Checks for programs.
 AC_PROG_CC
 AC_CHECK_PROG([GGO],[gengetopt],[gengetopt])
+
+MMC_PATH_RDDMA_API
 
 # Checks for libraries.
 AC_CHECK_LIB([rddma_api], [rddma_open])
