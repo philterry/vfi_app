@@ -157,7 +157,7 @@ int test_NBOO(int np, char **p)
 	int result = 0;
 	int timeout = -1;
 	void *h;
-	pthread_t tid;
+	pthread_t tid[np];
 
 	printf("Non-Blocking Out of Order Mode\n");
 	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
@@ -166,15 +166,18 @@ int test_NBOO(int np, char **p)
 		printf ("inputs[%d]: %s\n",i,p[i]);
 		h = rddma_alloc_async_handle();
 		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", p[i],h);
-		pthread_create(&tid,0,thr_f,(void *)h);
+		pthread_create(&tid[i],0,thr_f,(void *)h);
 	}
 
 	for (i = 0; i < np; i++) {
 		result = rddma_get_result_async(dev,timeout);
 	}
 
+	for (i = 0; i < np; i++)
+		pthread_join(tid[i],0);
+
 	rddma_close(dev);
-	
+
 	return result;
 }
 
