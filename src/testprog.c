@@ -76,7 +76,6 @@ int test_NBO(int np, char **p)
 	struct rddma_dev *dev;
 	char *output;
 	int result = 1;
-	int timeout = -1;
 
 	printf("Non-Blocking Ordered Mode\n");
 	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
@@ -84,7 +83,7 @@ int test_NBO(int np, char **p)
 	for (i = 0; i < np && result; i++) {
 		printf ("%s\n\t -> ",p[i]);
 
-		result = rddma_do_cmd_blk(dev,timeout,&output, "%s\n", p[i]);
+		result = rddma_do_cmd_blk(dev,&output, "%s\n", p[i]);
 		if (result < 0)
 			break;
 
@@ -106,7 +105,6 @@ int test_NBIO(int np, char **p)
 	struct rddma_dev *dev;
 	char *output;
 	int result = 1;
-	int timeout = -1;
 
 	printf("Non-Blocking Interleaved Ordered Mode\n");
 	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
@@ -118,7 +116,7 @@ int test_NBIO(int np, char **p)
 		if (result < 0)
 			break;
 
-		result = rddma_get_result(dev,timeout,&output);
+		result = rddma_get_result(dev,&output);
 		if (result < 0)
 			break;
 
@@ -155,7 +153,6 @@ int test_NBOO(int np, char **p)
 	struct rddma_dev *dev;
 	char *output;
 	int result = 0;
-	int timeout = -1;
 	void *h;
 	pthread_t tid[np];
 
@@ -170,7 +167,7 @@ int test_NBOO(int np, char **p)
 	}
 
 	for (i = 0; i < np; i++) {
-		result = rddma_get_result_async(dev,timeout);
+		result = rddma_get_result_async(dev);
 	}
 
 	for (i = 0; i < np; i++)
@@ -187,7 +184,6 @@ int test_AIOE(int np, char **p)
 	struct rddma_dev *dev;
 	char *output;
 	int result = 0;
-	int timeout = -1;
 	void *h;
 	pthread_t tid;
 
@@ -202,7 +198,7 @@ int test_AIOE(int np, char **p)
 	}
 
 	for (i = 0; i < np; i++) {
-		result = rddma_get_result_async(dev,timeout);
+		result = rddma_get_result_async(dev);
 	}
 
 	rddma_close(dev);
