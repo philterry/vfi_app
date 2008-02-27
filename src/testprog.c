@@ -48,7 +48,7 @@ int test_BO(int np, char **p)
 	int result = 1;
 
 	printf("Blocking Ordered Mode\n");
-	dev = rddma_open(NULL,0);
+	dev = rddma_open(NULL,-1);
 
 	for (i = 0; i < np && result; i++) {
 		printf ("%s\n\t -> ",p[i]);
@@ -70,35 +70,6 @@ int test_BO(int np, char **p)
 	return result;
 }
 
-int test_NBO(int np, char **p)
-{
-	int i;
-	struct rddma_dev *dev;
-	char *output;
-	int result = 1;
-
-	printf("Non-Blocking Ordered Mode\n");
-	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
-
-	for (i = 0; i < np && result; i++) {
-		printf ("%s\n\t -> ",p[i]);
-
-		result = rddma_do_cmd_blk(dev,&output, "%s\n", p[i]);
-		if (result < 0)
-			break;
-
-		sscanf(strstr(output,"result("),"result(%d)",&result);
-
-		printf("%s\n",output);
-
-		free(output); 
-	}
-
-	rddma_close(dev);
-	
-	return result;
-}
-
 int test_NBIO(int np, char **p)
 {
 	int i;
@@ -107,10 +78,10 @@ int test_NBIO(int np, char **p)
 	int result = 1;
 
 	printf("Non-Blocking Interleaved Ordered Mode\n");
-	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
+	dev = rddma_open(NULL,-1);
 
 	for (i = 0; i < np && result; i++) {
-		printf ("%s\n",p[i]);
+		printf ("%s\n\t -> ",p[i]);
 
 		result = rddma_invoke_cmd(dev, "%s\n", p[i]);
 		if (result < 0)
@@ -141,7 +112,7 @@ void *thr_f(void *h)
 	
 	sscanf(strstr(output,"result("),"result(%d)",&result);
 
-	printf("%s\n",output);
+	printf("\t -> %s\n",output);
 
 	free(output); 
 	rddma_free_async_handle(h);
@@ -157,10 +128,10 @@ int test_NBOO(int np, char **p)
 	pthread_t tid[np];
 
 	printf("Non-Blocking Out of Order Mode\n");
-	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
+	dev = rddma_open(NULL,-1);
 
 	for (i = 0; i < np; i++) {
-		printf ("inputs[%d]: %s\n",i,p[i]);
+		printf ("%s\n",p[i]);
 		h = rddma_alloc_async_handle();
 		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", p[i],h);
 		pthread_create(&tid[i],0,thr_f,(void *)h);
@@ -188,7 +159,7 @@ int test_AIOE(int np, char **p)
 	pthread_t tid;
 
 	printf("Non-Blocking Out of Order Mode\n");
-	dev = rddma_open(NULL,O_NONBLOCK | O_RDWR);
+	dev = rddma_open(NULL,-1);
 
 	for (i = 0; i < np; i++) {
 		printf ("inputs[%d]: %s\n",i,p[i]);
@@ -203,20 +174,6 @@ int test_AIOE(int np, char **p)
 
 	rddma_close(dev);
 	
-	return result;
-}
-int test_CRASH(int np, char **p)
-{
-	struct rddma_dev *dev;
-	int result = 1;
-	int i;
-
-	for (i=0;i<np && result;i++) {
-		dev = rddma_open(NULL,O_RDWR | O_NONBLOCK );
-		result = rddma_invoke_cmd(dev,"%s",p[i]);
-		rddma_close(dev);
-	}
-
 	return result;
 }
 
@@ -236,9 +193,6 @@ int main (int argc, char **argv)
 	case mode_arg_BO:
 		result = test_BO(opts.inputs_num,opts.inputs);
 		break;
-	case mode_arg_NBO:
-		result = test_NBO(opts.inputs_num,opts.inputs);
-		break;
 	case mode_arg_NBIO:
 		result = test_NBIO(opts.inputs_num,opts.inputs);
 		break;
@@ -247,9 +201,6 @@ int main (int argc, char **argv)
 		break;
 	case mode_arg_AIOE:
 		result = test_AIOE(opts.inputs_num,opts.inputs);
-		break;
-	case mode_arg_CRASH:
-		result = test_CRASH(opts.inputs_num,opts.inputs);
 		break;
 	}
 	
