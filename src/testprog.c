@@ -40,20 +40,67 @@ void fred(struct rddma_dev *dev, char *input, char *output)
 	}
 }
 
-int test_BO(int np, char **p)
+struct source_handle {
+	int (*f)(void *, char **, int *);
+	void *h;
+};
+
+int get_inputs(void *s, char **command, int *size)
+{
+	struct gengetopt_args_info *opts = (struct gengetopt_args_info *)s;
+	if (*size < opts->inputs_num)
+		*command = opts->inputs[*size];
+	return ((*size)++ < opts->inputs_num);
+}
+
+void *setup_inputs(struct gengetopt_args_info *opts)
+{
+	struct source_handle *h = malloc(sizeof(*h));
+	h->f = get_inputs;
+	h->h = (void *)opts;
+	return (void *)h;
+}
+
+int get_file(void *s, char **command, int *size)
+{
+	FILE *fp = (FILE *)s;
+	return fscanf(fp,"%a[^\n]\n",command) > 0;
+}
+
+void *setup_file(FILE *fp)
+{
+	struct source_handle *h = malloc(sizeof(*h));
+	h->f = get_file;
+	h->h = (void *)fp;
+	return (void *)h;
+}
+
+int get_data(void *source, char **command, int *size)
+{
+	struct source_handle *src = (struct source_handle *)source;
+
+	if (*command)
+		free(*command);
+
+	return src->f(src->h,command,size);
+}
+
+int test_BO(void *h, struct gengetopt_args_info *opts)
 {
 	int i;
 	struct rddma_dev *dev;
 	char *output;
+	char *cmd = NULL;
+	int size = 0;
 	int result = 1;
 
 	printf("Blocking Ordered Mode\n");
-	dev = rddma_open(NULL,-1);
+	dev = rddma_open(NULL,opts->timeout_arg);
+	while (get_data(h,&cmd,&size) && result) {
 
-	for (i = 0; i < np && result; i++) {
-		printf ("%s\n\t -> ",p[i]);
+		printf ("%s\n\t -> ",cmd);
 
-		result = rddma_do_cmd(dev,&output, "%s\n", p[i]);
+		result = rddma_do_cmd(dev,&output, "%s\n", cmd);
 
 		if (result < 0)
 			break;
@@ -70,20 +117,21 @@ int test_BO(int np, char **p)
 	return result;
 }
 
-int test_NBIO(int np, char **p)
+int test_NBIO(void *h, struct gengetopt_args_info *opts)
 {
-	int i;
+	int size = 0;
+	char *cmd = NULL;
 	struct rddma_dev *dev;
 	char *output;
 	int result = 1;
 
 	printf("Non-Blocking Interleaved Ordered Mode\n");
-	dev = rddma_open(NULL,-1);
+	dev = rddma_open(NULL,opts->timeout_arg);
 
-	for (i = 0; i < np && result; i++) {
-		printf ("%s\n\t -> ",p[i]);
+	while (get_data(h,&cmd,&size) && result) {
+		printf ("%s\n\t -> ",cmd);
 
-		result = rddma_invoke_cmd(dev, "%s\n", p[i]);
+		result = rddma_invoke_cmd(dev, "%s\n", cmd);
 		if (result < 0)
 			break;
 
@@ -118,30 +166,34 @@ void *thr_f(void *h)
 	rddma_free_async_handle(h);
 }
 
-int test_NBOO(int np, char **p)
+int test_NBOO(void *h, struct gengetopt_args_info *opts)
 {
-	int i;
+	int i = 0;
+	int count = 0;
+	int size = 0;
+	char *cmd = NULL;
 	struct rddma_dev *dev;
 	char *output;
 	int result = 0;
-	void *h;
-	pthread_t tid[np];
+	void *ah;
+	pthread_t tid[100];
 
 	printf("Non-Blocking Out of Order Mode\n");
-	dev = rddma_open(NULL,-1);
+	dev = rddma_open(NULL,opts->timeout_arg);
 
-	for (i = 0; i < np; i++) {
-		printf ("%s\n",p[i]);
-		h = rddma_alloc_async_handle();
-		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", p[i],h);
-		pthread_create(&tid[i],0,thr_f,(void *)h);
+	while ( get_data(h,&cmd,&size)) {
+
+		printf ("%s\n",cmd);
+		ah = rddma_alloc_async_handle();
+		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", cmd,ah);
+		pthread_create(&tid[count++],0,thr_f,(void *)ah);
 	}
 
-	for (i = 0; i < np; i++) {
+	for (i = 0; i < count; i++) {
 		result = rddma_get_result_async(dev);
 	}
 
-	for (i = 0; i < np; i++)
+	for (i = 0; i < count; i++)
 		pthread_join(tid[i],0);
 
 	rddma_close(dev);
@@ -149,63 +201,83 @@ int test_NBOO(int np, char **p)
 	return result;
 }
 
-int test_AIOE(int np, char **p)
+int test_AIOE(void *h, struct gengetopt_args_info *opts)
 {
 	int i;
+	int count = 0;
+	int size = 0;
+	char *cmd = NULL;
 	struct rddma_dev *dev;
 	char *output;
 	int result = 0;
-	void *h;
-	pthread_t tid;
+	void *ah;
+	pthread_t tid[100];
 
 	printf("Non-Blocking Out of Order Mode\n");
-	dev = rddma_open(NULL,-1);
+	dev = rddma_open(NULL,opts->timeout_arg);
 
-	for (i = 0; i < np; i++) {
-		printf ("inputs[%d]: %s\n",i,p[i]);
-		h = rddma_alloc_async_handle();
-		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", p[i],h);
-		pthread_create(&tid,0,thr_f,(void *)h);
+	while (get_data(h,&cmd,&size)) {
+		printf ("%s\n",cmd);
+		ah = rddma_alloc_async_handle();
+		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", cmd, ah);
+		pthread_create(&tid[count++],0,thr_f,(void *)ah);
 	}
 
-	for (i = 0; i < np; i++) {
+	for (i = 0; i < count; i++) {
 		result = rddma_get_result_async(dev);
 	}
+
+	for (i = 0; i < count; i++)
+		pthread_join(tid[i],0);
 
 	rddma_close(dev);
 	
 	return result;
 }
 
-int main (int argc, char **argv)
+int process_commands(void *h, struct gengetopt_args_info *opts)
 {
 	int result;
-	int i;
-	char *output;
-	struct rddma_dev *dev;
+	switch(opts->mode_arg) {
+	case mode_arg_BO:
+		result = test_BO(h,opts);
+		break;
+	case mode_arg_NBIO:
+		result = test_NBIO(h,opts);
+		break;
+	case mode_arg_NBOO:
+		result = test_NBOO(h,opts);
+		break;
+	case mode_arg_AIOE:
+		result = test_AIOE(h,opts);
+		break;
+	}
+	return result;
+}
+
+int main (int argc, char **argv)
+{
 	struct gengetopt_args_info opts;
+	void *h;
 
 	cmdline_parser_init(&opts);
 
 	cmdline_parser(argc,argv,&opts);
 
-	switch(opts.mode_arg) {
-	case mode_arg_BO:
-		result = test_BO(opts.inputs_num,opts.inputs);
-		break;
-	case mode_arg_NBIO:
-		result = test_NBIO(opts.inputs_num,opts.inputs);
-		break;
-	case mode_arg_NBOO:
-		result = test_NBOO(opts.inputs_num,opts.inputs);
-		break;
-	case mode_arg_AIOE:
-		result = test_AIOE(opts.inputs_num,opts.inputs);
-		break;
+	if (opts.file_given) {
+		h = setup_file(fopen(opts.file_arg,"r"));
+		process_commands(h,&opts);
 	}
-	
-	return result;
 
+	if (opts.inputs_num) {
+		h = setup_inputs(&opts);
+		process_commands(h,&opts);
+	}
+
+	if (opts.interactive_given) {
+		h = setup_file(stdin);
+		process_commands(h,&opts);
+	}
 }
 
 
