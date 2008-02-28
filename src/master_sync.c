@@ -28,10 +28,12 @@
 int get_error_code(char *s) 
 {
 	int ret;
-	char *res = strcasestr (s, "result(");
-#ifdef NOTARGET
-	return 0;
-#endif
+	char *res;
+	if (s)
+		res = strcasestr (s, "result(");
+	else
+		return 0;
+
 	if (res == NULL) {
 		printf("missing result in rddma reply string!\n");
 		return -1;
@@ -44,17 +46,18 @@ int get_error_code(char *s)
 /* Send string 'str' to rddma driver.
  * The string will be overwritten by the reply from the driver.
  */
-void execute_rddma_string(struct rddma_dev *dev,char *str)
+void execute_rddma_string(struct rddma_dev *dev, char *str, char **reply)
 {
 #ifdef DBG
 	printf("%s\n", str);
 #endif
-	fprintf(dev->file,str);
-	fflush(dev->file);
-#ifndef NOTARGET
- 	fscanf(dev->file,"%s", str); 
+#ifdef NOTARGET
+	rddma_invoke_cmd_str(dev,str,0);
+	*reply = NULL;
+#else
+	rddma_do_cmd_str(dev,reply,str,0);
 #ifdef DBG
-	printf("reply = %s\n", str);
+	printf("reply = %s\n", *reply);
 #endif
 #endif
 }
@@ -64,6 +67,8 @@ int bind_create(struct rddma_dev *dev,char *name, char *loc, int len,
 	char *srcname, char *srcloc, int srcoff, char *srcevent)
 {
 	char output[1000];
+	char *reply;
+	int ret;
 	char temp[100];
 	sprintf(output,"bind_create://%s", name);
 
@@ -117,13 +122,17 @@ int bind_create(struct rddma_dev *dev,char *name, char *loc, int len,
 		strcat(output,temp);
 	}
 bind_string_ready:
-	execute_rddma_string(dev,output);
-	return (get_error_code(output));
+	execute_rddma_string(dev,output,&reply);
+	ret = get_error_code(reply);
+	free(reply);
+	return ret;
 }
 
 int event_start(struct rddma_dev *dev,char *name, char *loc, int wait)
 {
 	char output[1000];
+	char *reply;
+	int ret;
 	sprintf(output,"event_start://%s", name);
 
 	if (loc) {
@@ -131,13 +140,17 @@ int event_start(struct rddma_dev *dev,char *name, char *loc, int wait)
 		strcat(output,loc);
 	}
 
-	execute_rddma_string(dev,output);
-	return(get_error_code(output));
+	execute_rddma_string(dev,output,&reply);
+	ret = get_error_code(reply);
+	free(reply);
+	return ret;
 }
 
 int xfer_create(struct rddma_dev *dev,char *name, char *loc)
 {
 	char output[1000];
+	char *reply;
+	int ret;
 	sprintf(output,"xfer_create://%s", name);
 
 	if (loc) {
@@ -145,18 +158,21 @@ int xfer_create(struct rddma_dev *dev,char *name, char *loc)
 		strcat(output,loc);
 	}
 
-	execute_rddma_string(dev,output);
-	return (get_error_code(output));
+	execute_rddma_string(dev,output,&reply);
+	ret = get_error_code(reply);
+	free(reply);
+	return ret;
 }
 
 /* Does the RDDMA smb_mmap, then call libc to actually do the mapping */
 int smb_mmap(struct rddma_dev *dev,char *name, char *loc, int offset, int len, void **buf) 
 {
 	char output[1000];
+	char *reply;
+	int ret;
 	char temp[8];
 	char *tid_s;
 	unsigned long tid;
-	int ret;
 	void* mapping;
 	sprintf(output,"smb_mmap://%s", name);
 
@@ -174,12 +190,15 @@ int smb_mmap(struct rddma_dev *dev,char *name, char *loc, int offset, int len, v
 		strcat(output,temp);
 	}
 
-	execute_rddma_string(dev,output);
-	ret = get_error_code(output);
-	if (ret)
+	execute_rddma_string(dev,output,&reply);
+	ret = get_error_code(reply);
+	if (ret) {
+		free(reply);
 		return (ret);
+	}
 #ifdef NOTARGET
 	*buf = NULL;
+	free(reply);
 	return 0;
 #endif
 
@@ -189,7 +208,7 @@ int smb_mmap(struct rddma_dev *dev,char *name, char *loc, int offset, int len, v
 	* where (x) is the offset, in hex, that we need to use
 	* with actual mmap calls to map the target area.
 	*/
-	tid_s = strcasestr (output, "mmap_offset(");
+	tid_s = strcasestr (reply, "mmap_offset(");
 	unsigned long t_id = strtoul (tid_s + 12,0,16);
 	printf ("mmap... %08lx\n", t_id);
 	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
@@ -198,6 +217,7 @@ int smb_mmap(struct rddma_dev *dev,char *name, char *loc, int offset, int len, v
 		perror("mmap failed");
 	}
 	*buf = mapping;
+	free(reply);
 	return 0;
 }
 
@@ -208,6 +228,7 @@ int smb_mmap(struct rddma_dev *dev,char *name, char *loc, int offset, int len, v
 int smb_create(struct rddma_dev *dev,char *name, char *loc, int offset, int len, int map, void **buf) 
 {
 	char output[1000];
+	char *reply;
 	char temp[8];
 	int ret;
 	sprintf(output,"smb_create://%s", name);
@@ -226,8 +247,9 @@ int smb_create(struct rddma_dev *dev,char *name, char *loc, int offset, int len,
 		strcat(output,temp);
 	}
 
-	execute_rddma_string(dev,output);
-	ret = get_error_code(output);
+	execute_rddma_string(dev,output,&reply);
+	ret = get_error_code(reply);
+	free(reply);
 	if (ret)
 		return (ret);
 	else if (!map)
@@ -267,6 +289,8 @@ void add_opt(char *base, char *option)
 int location_create(struct rddma_dev *dev,char *s, unsigned int flags, int node) 
 {
 	char output[1000];
+	char *reply;
+	int ret;
 	char temp[8];
 #ifdef DBG
 	printf("location_create: %s\n", s);
@@ -313,13 +337,17 @@ int location_create(struct rddma_dev *dev,char *s, unsigned int flags, int node)
 		}
 	}
 
-	execute_rddma_string(dev,output);
-	return (get_error_code(output));
+	execute_rddma_string(dev,output,&reply);
+	ret = get_error_code(reply);
+	free(reply);
+	return ret;
 }
 
 int location_find(struct rddma_dev *dev,char *name, unsigned int flags)
 {
 	char output[1000];
+	char *reply;
+	int ret;
 	sprintf(output,"location_find://%s", name);
 	if (flags & RIO_FABRIC) 
 		add_opt(output, "fabric(rddma_fabric_rionet)");
@@ -337,8 +365,10 @@ int location_find(struct rddma_dev *dev,char *name, unsigned int flags)
 	else if (flags & PUBLIC_OPS) {
 		add_opt(output, "default_ops(public)");
 	}
-	execute_rddma_string(dev,output);
-	return (get_error_code(output));
+	execute_rddma_string(dev,output,&reply);
+	ret = get_error_code(reply);
+	free(reply);
+	return ret;
 }
 
 /* Fabric call timeout in seconds */
@@ -382,8 +412,6 @@ int wait_for_location(struct rddma_dev *dev, char *name, unsigned int flags, int
 /* Example -- How to wait for a remote node to come up */
 int main (int argc, char **argv)
 {
-	int fd;
-	FILE *file;
 	int failed = 0;
 	unsigned int *buf1=NULL;
 	unsigned int *buf2=NULL;
@@ -397,15 +425,14 @@ int main (int argc, char **argv)
 #ifdef NOTARGET
 	dev = calloc(1,sizeof(*dev));
 	dev->fd = open("junk",O_RDWR | O_CREAT);
-	if ( dev < 0 ) {
+	if ( dev->fd < 0 ) {
 		perror("Unable to open /dev/rddma");
 		return (0);
 	}
 	else
 		printf("OK\n");
 
-	fp_rddma = fdopen(fd_rddma,"r+");
-	dev->file = fdopen(dev->fd,"f+");
+	dev->file = fdopen(dev->fd,"r+");
 	dev->timeout = -1;
 #else
 	dev = rddma_open(0, -1);
