@@ -1,7 +1,7 @@
 #include <rddma_api.h>
 #include <semaphore.h>
 #include <pthread.h>
-#include "cmdline.h"
+#include <tp_cmdline.h>
 
 void fred(struct rddma_dev *dev, char *input, char *output)
 {

@@ -2,10 +2,10 @@ INCLUDES = $(RDDMA_API_INCLUDES)
 
 bin_PROGRAMS = testprog testprog_async testprog_phil local_dma_test master_sync
 
-testprog_SOURCES = testprog.c cmdline.c cmdline.h
+testprog_SOURCES = testprog.c tp_cmdline.c tp_cmdline.h
 
-cmdline.h:testprog.ggo
-	$(GGO) < testprog.ggo
+tp_cmdline.h tp_cmdline.c:testprog.ggo
+	$(GGO) --file-name=tp_cmdline < testprog.ggo 
 
 testprog_LDADD = $(RDDMA_API_LIBADDS)
 testprog_async_LDADD = $(RDDMA_API_LIBADDS)
