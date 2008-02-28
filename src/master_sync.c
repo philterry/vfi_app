@@ -1,11 +1,15 @@
+#define _GNU_SOURCE 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <time.h>
+#include <unistd.h>
 #include <rddma_api.h>
-
-/* Simple example app using RDDMA.
-/* It creates 2 local SMBS, fills one with data, uses the 
- * DMA engine to copy one SMB to another, and compares
- * the source and destination SMB
- */
-
 /* 
  * Build with DBG defined to echo strings sent to and received from RDDMA.
  * Build with NOTARGET defined to just generate RDDMA command strings and
@@ -24,7 +28,7 @@
 int get_error_code(char *s) 
 {
 	int ret;
-	char *res = strstr (s, "result(");
+	char *res = strcasestr (s, "result(");
 #ifdef NOTARGET
 	return 0;
 #endif
@@ -117,7 +121,7 @@ bind_string_ready:
 	return (get_error_code(output));
 }
 
-int event_start(struct rddma_dev *dev, char *name, char *loc, int wait)
+int event_start(struct rddma_dev *dev,char *name, char *loc, int wait)
 {
 	char output[1000];
 	sprintf(output,"event_start://%s", name);
@@ -128,11 +132,10 @@ int event_start(struct rddma_dev *dev, char *name, char *loc, int wait)
 	}
 
 	execute_rddma_string(dev,output);
-
 	return(get_error_code(output));
 }
 
-int xfer_create(struct rddma_dev *dev, char *name, char *loc)
+int xfer_create(struct rddma_dev *dev,char *name, char *loc)
 {
 	char output[1000];
 	sprintf(output,"xfer_create://%s", name);
@@ -143,12 +146,11 @@ int xfer_create(struct rddma_dev *dev, char *name, char *loc)
 	}
 
 	execute_rddma_string(dev,output);
-
 	return (get_error_code(output));
 }
 
 /* Does the RDDMA smb_mmap, then call libc to actually do the mapping */
-int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, void **buf) 
+int smb_mmap(struct rddma_dev *dev,char *name, char *loc, int offset, int len, void **buf) 
 {
 	char output[1000];
 	char temp[8];
@@ -173,7 +175,6 @@ int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, 
 	}
 
 	execute_rddma_string(dev,output);
-
 	ret = get_error_code(output);
 	if (ret)
 		return (ret);
@@ -188,7 +189,8 @@ int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, 
 	* where (x) is the offset, in hex, that we need to use
 	* with actual mmap calls to map the target area.
 	*/
-	unsigned long t_id = rddma_get_hex_option (output, "mmap_offset");
+	tid_s = strcasestr (output, "mmap_offset(");
+	unsigned long t_id = strtoul (tid_s + 12,0,16);
 	printf ("mmap... %08lx\n", t_id);
 	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
 	if ((unsigned long) mapping == -1) {
@@ -203,7 +205,7 @@ int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, 
  * if map==1, *buf is a pointer to the SMB.  Otherwise SMB will be created
  * but not accessible from userland.  
  */
-int smb_create(struct rddma_dev *dev, char *name, char *loc, int offset, int len, int map, void **buf) 
+int smb_create(struct rddma_dev *dev,char *name, char *loc, int offset, int len, int map, void **buf) 
 {
 	char output[1000];
 	char temp[8];
@@ -225,7 +227,6 @@ int smb_create(struct rddma_dev *dev, char *name, char *loc, int offset, int len
 	}
 
 	execute_rddma_string(dev,output);
-
 	ret = get_error_code(output);
 	if (ret)
 		return (ret);
@@ -263,7 +264,7 @@ void add_opt(char *base, char *option)
 
 /* flags SYSROOT, SYSREMOTE, RIO_FABRIC, NET_FABRIC, RIO_DMA */
 /* Returns status code */
-int location_create(struct rddma_dev *dev, char *s, unsigned int flags, int node) 
+int location_create(struct rddma_dev *dev,char *s, unsigned int flags, int node) 
 {
 	char output[1000];
 	char temp[8];
@@ -313,43 +314,135 @@ int location_create(struct rddma_dev *dev, char *s, unsigned int flags, int node
 	}
 
 	execute_rddma_string(dev,output);
-
 	return (get_error_code(output));
 }
 
-#define SMB_LEN 0x3000
+int location_find(struct rddma_dev *dev,char *name, unsigned int flags)
+{
+	char output[1000];
+	sprintf(output,"location_find://%s", name);
+	if (flags & RIO_FABRIC) 
+		add_opt(output, "fabric(rddma_fabric_rionet)");
+	else if (flags & NET_FABRIC) 
+		add_opt(output,"fabric(rddma_fabric_net)");
 
-/* Create 2 local SMBs, copy one to the other, and compare */
+	if (flags & RIO_DMA) 
+		add_opt(output, "dma_name(rddma_rio_dma)");
+	else if (flags & PPC8245_DMA) 
+		add_opt(output,"dma_name(ppc8245)");
+
+	if (flags & PRIVATE_OPS) { 
+		add_opt(output, "default_ops(private)"); 
+	}
+	else if (flags & PUBLIC_OPS) {
+		add_opt(output, "default_ops(public)");
+	}
+	execute_rddma_string(dev,output);
+	return (get_error_code(output));
+}
+
+/* Fabric call timeout in seconds */
+#define RDDMA_TIMEOUT 5
+
+int wait_for_location(struct rddma_dev *dev, char *name, unsigned int flags, int seconds)
+{
+	int ret;
+	int try = seconds / RDDMA_TIMEOUT;
+	time_t tv;
+	time_t cur_time;
+
+	if (seconds < 0 || try == 0)
+		try = 1;
+
+	cur_time = time(NULL);
+	tv = cur_time - RDDMA_TIMEOUT;
+	do {
+#ifdef DBG
+		printf("wait for %s\n", name);
+		printf("tv, cur_time =  %d, %d\n", tv, cur_time);
+#endif
+		if (tv + RDDMA_TIMEOUT > cur_time)
+			sleep (RDDMA_TIMEOUT - (cur_time - tv));
+		ret = location_find(dev,name, flags);
+		if (ret == 0 || ret != 1)
+			break;
+		if (seconds >= 0) {
+			try--;
+			tv = cur_time;
+			cur_time = time(NULL);
+		}
+	} while(try);
+
+	return (ret);
+}
+
+#define SMB_LEN 0x3000
+#define TRY_MAX 2
+
+/* Example -- How to wait for a remote node to come up */
 int main (int argc, char **argv)
 {
-	struct rddma_dev *dev;
+	int fd;
+	FILE *file;
 	int failed = 0;
 	unsigned int *buf1=NULL;
 	unsigned int *buf2=NULL;
 	int i;
 	int ret;
-
+	int try;
+	struct rddma_dev *dev;
 	char *output;
 
 	printf("Opening /dev/rddma...");
 #ifdef NOTARGET
-	dev = rddma_open("junk",O_RDWR | O_CREAT);
-#else
-	dev = rddma_open("/dev/rddma",O_RDWR);
-#endif
-	if ( dev == NULL ) {
+	dev = calloc(1,sizeof(*dev));
+	dev->fd = open("junk",O_RDWR | O_CREAT);
+	if ( dev < 0 ) {
 		perror("Unable to open /dev/rddma");
 		return (0);
 	}
 	else
 		printf("OK\n");
 
-	ret = location_create(dev,"fred12", PRIVATE_OPS | RIO_DMA | RIO_FABRIC, 0);
+	fp_rddma = fdopen(fd_rddma,"r+");
+	dev->file = fdopen(dev->fd,"f+");
+	dev->timeout = -1;
+#else
+	dev = rddma_open(0, -1);
+#endif
+
+	ret = location_create(dev,"fabric", SYSROOT | RIO_FABRIC | RIO_DMA, 0);
 	if (ret) {
 		printf("location_create failed\n");
 		goto done;
 	}
 
+	ret = location_create(dev,"master.fabric", 0, 1);
+	if (ret) {
+		printf("location_create failed\n");
+		goto done;
+	}
+
+	ret = location_create(dev,"slave.fabric", PUBLIC_OPS, 2);
+	if (ret) {
+		printf("location_create failed\n");
+		goto done;
+	}
+
+	ret = location_create(dev,"up.master.fabric", 0, 0);
+	if (ret) {
+		printf("location_create failed\n");
+		goto done;
+	}
+
+	ret = wait_for_location(dev,"up.slave.fabric", 0, 60);
+	if (ret != 0) {
+		printf("Slave not present, exiting\n");
+		goto done;
+	}
+	printf("slave ready!\n");
+
+#if 0
 	/* Create and initialize 2 SMBs */
 
 	/* args: name, loc, offset, extent, map */
@@ -416,12 +509,19 @@ done:
 		munmap(buf2, SMB_LEN);
 #if 0
 	/* Add a bunch of rddma *_delete calls here... once they're fixed */
-	xfer_delete("xf","fred12");  /* assumes xfer_delete gets rid of all binds */
-	event_delete("s","fred12");  /* ? */
-	smb_delete("buf2", "fred12");
-	smb_delete("buf1", "fred12");
-	location_delete("fred12");
+	xfer_delete(dev,"xf","fred12");  /* assumes xfer_delete gets rid of all binds */
+	event_delete(dev,"s","fred12");  /* ? */
+	smb_delete(dev,"buf2", "fred12");
+	smb_delete(dev,"buf1", "fred12");
+	location_delete(dev,"fred12");
 #endif
+#endif
+done:
+#ifndef NOTARGET
+	fclose(dev->file);
+	close(dev->fd);
+#else
 	rddma_close(dev);
+#endif
 	
 }

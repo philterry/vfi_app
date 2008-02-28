@@ -23,5 +23,7 @@ src/local_dma_test.o
 stamp-h1
 src/testprog_phil
 src/testprog_phil.o
+src/master_sync
+src/master_sync.o
 src/cmdline.c
 src/cmdline.h

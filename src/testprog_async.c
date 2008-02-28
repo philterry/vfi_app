@@ -85,4 +85,3 @@ int main (int argc, char **argv)
 	rddma_close(dev);
 	
 }
-
