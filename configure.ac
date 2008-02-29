@@ -27,10 +27,6 @@ AC_C_CONST
 AC_TYPE_SIZE_T
 
 # Checks for library functions.
-AC_FUNC_MALLOC
-AC_HEADER_STDC
-AC_FUNC_MMAP
-AC_CHECK_FUNCS([memset strstr strtol])
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile])
