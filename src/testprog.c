@@ -16,7 +16,7 @@ void fred(struct rddma_dev *dev, char *input, char *output)
 		* where <x> is the offset, in hex, that we need to use
 		* with actual mmap calls to map the target area.
 		*/
-		unsigned long t_id = rddma_get_hex_option(output,"mmap_offset");
+		unsigned long t_id = rddma_get_hex_arg(output,"mmap_offset");
 		if (t_id) {
 			void* mapping;
 			/*
@@ -75,14 +75,29 @@ void *setup_file(FILE *fp)
 	return (void *)h;
 }
 
-int get_data(void *source, char **command, int *size)
+int internal_cmd(struct rddma_dev *dev, char *cmd, int size)
+{
+	return 0;
+}
+
+int rddma_get_cmd(struct rddma_dev *dev, void *source, char **command, int *size)
 {
 	struct source_handle *src = (struct source_handle *)source;
+	char *cmd;
+	int ret;
+	int sz;
 
 	if (*command)
 		free(*command);
 
-	return src->f(src->h,command,size);
+	while ( (ret = src->f(src->h,&cmd,&sz)) > 0) {
+		if (!internal_cmd(dev,cmd,sz))
+			break;
+	}
+
+	*command = cmd;
+	*size = sz;
+	return ret;
 }
 
 int test_BO(void *h, struct gengetopt_args_info *opts)
@@ -96,7 +111,7 @@ int test_BO(void *h, struct gengetopt_args_info *opts)
 
 	printf("Blocking Ordered Mode\n");
 	dev = rddma_open(NULL,opts->timeout_arg);
-	while (get_data(h,&cmd,&size) && result) {
+	while (rddma_get_cmd(dev,h,&cmd,&size) && result) {
 
 		printf ("%s\n\t -> ",cmd);
 
@@ -128,7 +143,7 @@ int test_NBIO(void *h, struct gengetopt_args_info *opts)
 	printf("Non-Blocking Interleaved Ordered Mode\n");
 	dev = rddma_open(NULL,opts->timeout_arg);
 
-	while (get_data(h,&cmd,&size) && result) {
+	while (rddma_get_cmd(dev,h,&cmd,&size) && result) {
 		printf ("%s\n\t -> ",cmd);
 
 		result = rddma_invoke_cmd(dev, "%s\n", cmd);
@@ -181,7 +196,7 @@ int test_NBOO(void *h, struct gengetopt_args_info *opts)
 	printf("Non-Blocking Out of Order Mode\n");
 	dev = rddma_open(NULL,opts->timeout_arg);
 
-	while ( get_data(h,&cmd,&size)) {
+	while ( rddma_get_cmd(dev,h,&cmd,&size)) {
 
 		printf ("%s\n",cmd);
 		ah = rddma_alloc_async_handle();
@@ -216,7 +231,7 @@ int test_AIOE(void *h, struct gengetopt_args_info *opts)
 	printf("Non-Blocking Out of Order Mode\n");
 	dev = rddma_open(NULL,opts->timeout_arg);
 
-	while (get_data(h,&cmd,&size)) {
+	while (rddma_get_cmd(dev,h,&cmd,&size)) {
 		printf ("%s\n",cmd);
 		ah = rddma_alloc_async_handle();
 		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", cmd, ah);

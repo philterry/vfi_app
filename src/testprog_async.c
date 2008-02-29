@@ -63,7 +63,7 @@ int main (int argc, char **argv)
 		 * where <x> is the offset, in hex, that we need to use
 		 * with actual mmap calls to map the target area.
 		 */
-		unsigned long t_id = rddma_get_hex_option (output,"mmap_offset");
+		unsigned long t_id = rddma_get_hex_arg (output,"mmap_offset");
 		if (t_id) {
 			void* mapping;
 			printf ("mmap... %08lx\n", t_id);
