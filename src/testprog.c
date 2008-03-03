@@ -65,7 +65,8 @@ int get_file(void *s, char **command, int *size)
 {
 	int ret;
 	FILE *fp = (FILE *)s;
-	if ( (ret = fscanf(fp,"%a[^\n]",command)) > 0)
+	ret = fscanf(fp,"%a[^\n]",command);
+	if (ret > 0)
 		fgetc(fp);
 	return ret > 0;
 }
@@ -179,9 +180,18 @@ void *thr_f(void *h)
 	sscanf(strstr(output,"result("),"result(%d)",&result);
 
 	printf("\t -> %s\n",output);
+	fflush(stdout);
 
 	free(output); 
 	rddma_free_async_handle(h);
+	pthread_exit(0);
+}
+
+void *thr_l(void *h)
+{
+	struct rddma_dev *dev = (struct rddma_dev *)h;
+	while (1)
+		rddma_get_result_async(dev);
 }
 
 int test_NBOO(void *h, struct gengetopt_args_info *opts)
@@ -195,9 +205,12 @@ int test_NBOO(void *h, struct gengetopt_args_info *opts)
 	int result = 0;
 	void *ah;
 	pthread_t tid[100];
+	pthread_t clean;
 
-	printf("Non-Blocking Out of Order Mode\n");
+	printf("Non-Blocking Out of Order Mode\n"); 
 	dev = rddma_open(NULL,opts->timeout_arg);
+
+	pthread_create(&clean,0,thr_l,(void *)dev);
 
 	while ( rddma_get_cmd(dev,h,&cmd,&size)) {
 
@@ -205,10 +218,6 @@ int test_NBOO(void *h, struct gengetopt_args_info *opts)
 		ah = rddma_alloc_async_handle();
 		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", cmd,ah);
 		pthread_create(&tid[count++],0,thr_f,(void *)ah);
-	}
-
-	for (i = 0; i < count; i++) {
-		result = rddma_get_result_async(dev);
 	}
 
 	for (i = 0; i < count; i++)
