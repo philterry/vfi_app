@@ -63,8 +63,11 @@ void *setup_inputs(struct gengetopt_args_info *opts)
 
 int get_file(void *s, char **command, int *size)
 {
+	int ret;
 	FILE *fp = (FILE *)s;
-	return fscanf(fp,"%a[^\n]\n",command) > 0;
+	if ( (ret = fscanf(fp,"%a[^\n]",command)) > 0)
+		fgetc(fp);
+	return ret > 0;
 }
 
 void *setup_file(FILE *fp)
