@@ -3,6 +3,64 @@
 #include <pthread.h>
 #include <tp_cmdline.h>
 
+struct cmd_elem {
+	struct cmd_elem *next;
+	int (*f)(struct rddma_dev *, char *);
+	int size;
+	char *cmd;
+	char b[];
+};
+
+int dummy_cmd(struct rddma_dev *dev, char *cmd)
+{
+	printf("%s:%s\n",__FUNCTION__,cmd);
+	return 1;
+}
+
+struct cmd_elem commands[] = {
+	{0,dummy_cmd,0,"map"},
+	{0,dummy_cmd,0,"pipe"},
+	{0,0,0,""},
+};
+
+int init_cmd_elem_ary(struct cmd_elem *ary)
+{
+	int i;
+	for (i = 0; ary[i].cmd[0] ; i++) {
+		ary[i].next = &ary[i+1];
+		ary[i].size = strlen(&ary[i].cmd[0]);
+	}
+}
+
+int internal_cmd(struct rddma_dev *dev, char *buf, int sz)
+{
+	struct cmd_elem *cmd;
+	char *term;
+	term = strstr(buf,"://");
+	
+	if (term) {
+		int size = term - buf;
+		
+		for (cmd = &commands[0];cmd && cmd->f; cmd = cmd->next)
+			if (size == cmd->size && !strncmp(buf,cmd->cmd,size))
+				return cmd->f(dev,term+3);
+	}
+	return 0;
+}
+
+int register_cmd(char *name, int (*f)(struct rddma_dev *,char *))
+{
+	struct cmd_elem *c;
+	int len = strlen(name);
+	c = calloc(1,sizeof(*c)+len+1);
+	strcpy(c->b,name);
+	c->cmd = c->b;
+	c->size = len;
+	c->f = f;
+	c->next = commands[0].next;
+	commands[0].next = c;
+}
+
 void fred(struct rddma_dev *dev, char *input, char *output)
 {
 
@@ -79,11 +137,6 @@ void *setup_file(FILE *fp)
 	return (void *)h;
 }
 
-int internal_cmd(struct rddma_dev *dev, char *cmd, int size)
-{
-	return 0;
-}
-
 int rddma_get_cmd(struct rddma_dev *dev, void *source, char **command, int *size)
 {
 	struct source_handle *src = (struct source_handle *)source;
@@ -124,7 +177,7 @@ int test_BO(void *h, struct gengetopt_args_info *opts)
 		if (result < 0)
 			break;
 
-		sscanf(strstr(output,"result("),"result(%d)",&result);
+		result = rddma_get_dec_arg(output,"result");
 
 		printf("%s\n",output);;
 
@@ -158,7 +211,7 @@ int test_NBIO(void *h, struct gengetopt_args_info *opts)
 		if (result < 0)
 			break;
 
-		sscanf(strstr(output,"result("),"result(%d)",&result);
+		result = rddma_get_dec_arg(output,"result");
 
 		printf("%s\n",output);
 
@@ -177,7 +230,7 @@ void *thr_f(void *h)
 
 	result = rddma_get_async_handle(h,&output);
 	
-	sscanf(strstr(output,"result("),"result(%d)",&result);
+	result = rddma_get_dec_arg(output,"result");
 
 	printf("\t -> %s\n",output);
 	fflush(stdout);
@@ -287,6 +340,9 @@ int main (int argc, char **argv)
 	struct gengetopt_args_info opts;
 	void *h;
 
+	init_cmd_elem_ary(&commands[0]);
+	register_cmd("fred",dummy_cmd);
+
 	cmdline_parser_init(&opts);
 
 	cmdline_parser(argc,argv,&opts);
@@ -306,6 +362,3 @@ int main (int argc, char **argv)
 		process_commands(h,&opts);
 	}
 }
-
-
-
