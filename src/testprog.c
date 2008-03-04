@@ -142,7 +142,7 @@ int rddma_get_cmd(struct rddma_dev *dev, void *source, char **command, int *size
 	struct source_handle *src = (struct source_handle *)source;
 	char *cmd;
 	int ret;
-	int sz;
+	int sz = *size;
 
 	if (*command)
 		free(*command);
