@@ -12,10 +12,10 @@ AC_PROG_LIBTOOL
 AC_PROG_CC
 AC_CHECK_PROG([GGO],[gengetopt],[gengetopt])
 
+#PKG_CHECK_MODULES(RDDMA_API,librddma_api)
 MMC_PATH_RDDMA_API
 
 # Checks for libraries.
-AC_CHECK_LIB([rddma_api], [rddma_open])
 AC_CHECK_LIB([pthread],[sem_init])
 
 # Checks for header files.
