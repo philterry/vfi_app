@@ -28,3 +28,4 @@ src/master_sync.o
 src/tp_cmdline.c
 src/tp_cmdline.h
 *.ril
+TAGS
