@@ -435,7 +435,7 @@ int main (int argc, char **argv)
 	dev->file = fdopen(dev->fd,"r+");
 	dev->timeout = -1;
 #else
-	dev = rddma_open(0, -1);
+	rddma_open(&dev,0, -1);
 #endif
 
 	ret = location_create(dev,"fabric", SYSROOT | RIO_FABRIC | RIO_DMA, 0);

@@ -1,5 +1,5 @@
 args "--unamed-opts --default-optional"
-option "mode" m "execution mode" values="BO","NBIO","NBOO","AIOE" default="BO" enum
-option "file" f "file of RIL directives" string
+option "device" d "RDDMA device" string default="/dev/rddma"
+option "file" f "file of RIL directives" string multiple
 option "interactive" i "interactive shell"
 option "timeout" t "timeout" int default="-1"
