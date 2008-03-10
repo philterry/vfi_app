@@ -12,12 +12,6 @@
  * I may just go the whole hog and implement that wholesale.
  *
  */
-void *dummy_cmd(struct rddma_dev *dev, char *cmd)
-{
-	printf("%s:%s\n",__FUNCTION__,cmd);
-	return (void *)1;
-}
-
 /* A sample closure... */
 void *do_pipe(void **e, char *result)
 {
@@ -57,7 +51,7 @@ void *do_pipe(void **e, char *result)
 }
 
 /* A sample internal command to create and deliver a closure... */
-void **parse_pipe(struct rddma_dev *dev, char *cmd)
+void **parse_pipe(struct rddma_dev *dev, void *ah, char *cmd)
 {
 /* pipe://[<inmap><]*<func>[(<event>[,<event]*)][><omap>]*  */
 
@@ -162,7 +156,7 @@ int test_BO(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_ar
 	while (rddma_get_cmd(src,&cmd) && result) {
 
 		/* Crap to debug closures... */
- 		e = rddma_find_pre_cmd(dev,cmd,size);
+ 		e = rddma_find_pre_cmd(dev,NULL,cmd);
  		if (e)
  			done = ((void *(*)(void **,char *))(e[0]))(e,output);
 		
@@ -227,7 +221,7 @@ void *thr_f(void *h)
 	int done = 0;
 
 	while (!done) {
-		result = rddma_get_async_handle(h,&output,(void **)&e);
+		rddma_wait_async_handle(h,&output,(void **)&e);
 		if (e)
 			done = ((int (*)(void **,char *))(e[0]))(e,output);
 		else
@@ -276,8 +270,9 @@ int test_NBOO(struct rddma_dev *dev,struct rddma_source *src, struct gengetopt_a
 
 	while ( rddma_get_cmd(src,&cmd)) {
 		printf ("%s\n",cmd);
-		e = rddma_find_pre_cmd(dev,cmd,size);
-		ah = rddma_alloc_async_handle(e);
+		ah = rddma_alloc_async_handle(NULL);
+		e = rddma_find_pre_cmd(dev,ah,cmd);
+		rddma_set_async_handle(ah,e);
 		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", cmd,ah);
 		pthread_create(&tid[count++],0,thr_f,(void *)ah);
 	}
@@ -310,7 +305,9 @@ int test_AIOE(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_
 
 	while (rddma_get_cmd(src,&cmd)) {
 		printf ("%s\n",cmd);
-		ah = rddma_alloc_async_handle(e);
+		ah = rddma_alloc_async_handle(NULL);
+		e = rddma_find_pre_cmd(dev,ah,cmd);
+		rddma_set_async_handle(ah,e);
 		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", cmd, ah);
 		pthread_create(&tid[count++],0,thr_f,(void *)ah);
 	}
@@ -350,14 +347,15 @@ int get_inputs(void *s, char **command)
 	return opts->inputs_num--;
 }
 
-int setup_inputs(struct rddma_source **src,struct gengetopt_args_info *opts)
+int setup_inputs(struct rddma_dev *dev, struct rddma_source **src,struct gengetopt_args_info *opts)
 {
-	struct rddma_source *h = malloc(sizeof(*h));
+	struct rddma_source *h = malloc(sizeof(*h)+sizeof(void *));
 	*src = h;
 	if (h == NULL)
 		return -ENOMEM;
 	h->f = get_inputs;
-	h->h = (void *)opts;
+	h->d = (void *)dev;
+	h->h[0] = (void *)opts;
 	return 0;
 }
 
@@ -383,24 +381,24 @@ int main (int argc, char **argv)
 	rddma_register_event(dev,"e1",(void *)1);
 	rddma_register_event(dev,"e2",(void *)2);
 
-	register_pre_cmd(dev,"pipe",parse_pipe);
+	rddma_register_pre_cmd(dev,"pipe",parse_pipe);
 
 	cmdline_parser_init(&opts);
 
 	cmdline_parser(argc,argv,&opts);
 
 	if (opts.file_given) {
-		rddma_setup_file(&s,fopen(opts.file_arg,"r"));
+		rddma_setup_file(dev,&s,fopen(opts.file_arg,"r"));
 		process_commands(dev,s,&opts);
 	}
 
 	if (opts.inputs_num) {
-		setup_inputs(&s,&opts);
+		setup_inputs(dev,&s,&opts);
 		process_commands(dev,s,&opts);
 	}
 
 	if (opts.interactive_given) {
-		rddma_setup_file(&s,stdin);
+		rddma_setup_file(dev,&s,stdin);
 		process_commands(dev,s,&opts);
 	}
 
