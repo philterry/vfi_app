@@ -211,7 +211,7 @@ int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, 
 	printf ("mmap... %08lx\n", t_id);
 	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
 	if ((unsigned long) mapping == -1) {
-		*buf == NULL;
+		*buf = NULL;
 		perror("mmap failed");
 	}
 	*buf = mapping;
@@ -427,7 +427,7 @@ int main (int argc, char **argv)
 	/* All done, diff buf1 and buf2 */
 	for (i = 0; i < SMB_LEN/4 ; i++) 
 		if (buf1[i] != buf2[i]) {
-			printf("i, buf1, buf2:  \n", i, buf1[i],buf2[i]);
+			printf("i(%d), buf1(%d), buf2(%d):  \n", i, buf1[i],buf2[i]);
 			failed = 1;
 		}
 #endif

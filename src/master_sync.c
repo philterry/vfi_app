@@ -213,7 +213,7 @@ int smb_mmap(struct rddma_dev *dev,char *name, char *loc, int offset, int len, v
 	printf ("mmap... %08lx\n", t_id);
 	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
 	if ((unsigned long) mapping == -1) {
-		*buf == NULL;
+		*buf = NULL;
 		perror("mmap failed");
 	}
 	*buf = mapping;
