@@ -2,6 +2,7 @@
 #include <semaphore.h>
 #include <pthread.h>
 #include <fw_cmdline.h>
+#include <sys/mman.h>
 
 int get_inputs(void *s, char **command)
 {
@@ -20,6 +21,97 @@ int setup_inputs(struct rddma_dev *dev, struct rddma_source **src, struct genget
 	h->f = get_inputs;
 	h->d = dev;
 	h->h[0] = (void *)opts;
+	return 0;
+}
+
+static char *parse_location(char *str)
+{
+	int start;
+	char *loc = NULL;
+	start = strcspn(str,".") + 1;
+	sscanf(str+start,"%a[^?=/]",&loc);
+	printf("%s:loc(%s),start(%d),str(%s)\n",__FUNCTION__,loc,start,str);
+	return loc;
+}
+
+void **parse_bind_cmd(struct rddma_dev *dev, void *ah, char *cmd)
+{
+	/* bind_create://x.xl.f/d.dl.f?event_name(dn)=s.sl.f?event_name(sn) */
+
+	char *sl,*dl,*xl,*sen,*den;
+	int size;
+	
+	sscanf(cmd,   "%a[^/]%n",&xl,&size);
+	sl = cmd + size;
+	sscanf(cmd+size,"%a[^=]%n",&dl,&size);
+	sl = sl + size;
+	
+	rddma_get_str_arg(sl,"event_name",&sen);
+	rddma_get_str_arg(dl,"event_name",&den);
+
+	sl = parse_location(sl);
+	dl = parse_location(dl);
+
+	rddma_register_event(dev,sen,sl);
+	rddma_register_event(dev,den,dl);
+	printf("%s:sen(%s),sl(%s),den(%s),dl(%s),xl(%s)\n",__FUNCTION__,sen,sl,den,dl,xl);
+	free(xl);
+	return 0;
+}
+
+int get_extent(char *str)
+{
+	int extent = 0;
+	char *ext = strstr(str,":");
+	if (ext)
+		sscanf(ext,":%x",&extent);
+	printf("%s:%s->%x\n",__FUNCTION__,str,extent);
+	return extent;
+}
+
+void **parse_smb_mmap_cmd(struct rddma_dev *dev, void *ah, char *cmd)
+{
+	/* smb_mmap://smb.loc.f#off:ext?map_name(name),mmap_offset(mapid) */
+	char *name;
+	char *result;
+	void **e;
+	long offset;
+	void *mem;
+	int prot = PROT_READ | PROT_WRITE;
+	int flags = MAP_SHARED;
+
+	if (rddma_get_str_arg(cmd,"map_name",&name) > 0) {
+		rddma_invoke_cmd(dev,ah,cmd);
+		rddma_wait_async_handle(ah,&result,(void *)&e);
+		offset = rddma_get_hex_arg(result,"mmap_offset");
+		mem = mmap(0, get_extent(cmd), prot, flags, dev->fd, offset);
+		rddma_register_map(dev,name,mem);
+		free(result);
+		return mem;
+	}
+	return 0;
+}
+
+void **parse_smb_create_cmd(struct rddma_dev *dev, void *ah, char *cmd)
+{
+	/* smb_create://smb.loc.f#off:ext?map_name(name) */
+	char *name;
+	char *result;
+	void **e;
+
+	if (rddma_get_str_arg(cmd,"map_name",&name) > 0) {
+		char *new_cmd;
+		rddma_invoke_cmd(dev,ah,cmd);
+		rddma_wait_async_handle(ah,&result,(void *)&e);
+		memcpy(result,"  smb_mmap",10);
+		new_cmd = malloc(strlen(result)+12+strlen(name));
+		sprintf(new_cmd,"%s,map_name(%s)",result+2,name);
+		e = parse_smb_mmap_cmd(dev, ah, new_cmd);
+		free(result);
+		free(name);
+		free(new_cmd);
+		return e;
+	}
 	return 0;
 }
 
@@ -161,11 +253,11 @@ void *source_thread(void *source)
 	ah = rddma_alloc_async_handle(NULL);
 	while (rddma_get_cmd(src,&cmd)) {
 		rddma_set_async_handle(ah,NULL);
-		rddma_find_pre_cmd(src->d, ah, cmd);
-		rddma_invoke_cmd(src->d,"%s?request(%p)\n",cmd,ah);
-		rddma_wait_async_handle(ah,&result,e);
-		if (e)
-			((void *(*)(void *))e[0])(e);
+		if (!rddma_find_pre_cmd(src->d, ah, cmd)) {
+			rddma_invoke_cmd(src->d,"%s?request(%p)\n",cmd,ah);
+			rddma_wait_async_handle(ah,&result,e);
+			rddma_invoke_closure(e);
+		}
 	}
 	return 0;
 }
@@ -182,25 +274,19 @@ void *driver_thread(void *h)
 	struct rddma_dev *dev = (struct rddma_dev *)h;
 	while (!done)
 		rddma_put_async_handle(dev);
+	return 0;
 }
 
 int initialize_api_commands(struct rddma_dev *dev)
 {
-	char *im1 = rddma_register_map(dev,"im1",calloc(1,128));
-	char *im2 = rddma_register_map(dev,"im2",calloc(1,128));
-	char *om1 = rddma_register_map(dev,"om1",calloc(1,128));
-	char *om2 = rddma_register_map(dev,"om2",calloc(1,128));
-
-	strcpy(im1,"hello this is in map string one");
-	strcpy(im2,"hello this is in map string two");
-	strcpy(om1,"hello this is out map string one");
-	strcpy(om2,"hello this is out map string two");
-
 	rddma_register_func(dev,"show",do_pipe);
-	rddma_register_event(dev,"e1",(void *)1);
-	rddma_register_event(dev,"e2",(void *)2);
 
 	rddma_register_pre_cmd(dev,"pipe",parse_pipe);
+	rddma_register_pre_cmd(dev,"bind_create",parse_bind_cmd);
+	rddma_register_pre_cmd(dev,"smb_create",parse_smb_create_cmd);
+	rddma_register_pre_cmd(dev,"smb_mmap",parse_smb_mmap_cmd);
+
+	return 0;
 }
 
 int main (int argc, char **argv)
