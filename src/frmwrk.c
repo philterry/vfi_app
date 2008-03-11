@@ -4,16 +4,16 @@
 #include <fw_cmdline.h>
 #include <sys/mman.h>
 
-int get_inputs(void *s, char **command)
+int get_inputs(void **s, char **command)
 {
-	struct gengetopt_args_info *opts = (struct gengetopt_args_info *)s;
-	*command = *opts->inputs++;
+	struct gengetopt_args_info *opts = *s;
+	*command = *(opts->inputs++);
 	return opts->inputs_num--;
 }
 
 int setup_inputs(struct rddma_dev *dev, struct rddma_source **src, struct gengetopt_args_info *opts)
 {
-	struct rddma_source *h = malloc(sizeof(*h)+sizeof(void *[1]));
+	struct rddma_source *h = malloc(sizeof(*h)+sizeof(void *));
 	*src = h;
 	if (src == NULL)
 		return -ENOMEM;
@@ -255,7 +255,7 @@ void *source_thread(void *source)
 		rddma_set_async_handle(ah,NULL);
 		if (!rddma_find_pre_cmd(src->d, ah, cmd)) {
 			rddma_invoke_cmd(src->d,"%s?request(%p)\n",cmd,ah);
-			rddma_wait_async_handle(ah,&result,e);
+			rddma_wait_async_handle(ah,&result,(void *)&e);
 			rddma_invoke_closure(e);
 		}
 	}
@@ -273,7 +273,7 @@ void *driver_thread(void *h)
 {
 	struct rddma_dev *dev = (struct rddma_dev *)h;
 	while (!done)
-		rddma_put_async_handle(dev);
+		rddma_post_async_handle(dev);
 	return 0;
 }
 

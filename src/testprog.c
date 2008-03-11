@@ -236,7 +236,7 @@ void *thr_l(void *h)
 {
 	struct rddma_dev *dev = (struct rddma_dev *)h;
 	while (1)
-		rddma_put_async_handle(dev);
+		rddma_post_async_handle(dev);
 }
 
 /* Another example of application processing style, completely out of
@@ -328,9 +328,9 @@ int process_commands(struct rddma_dev *dev, struct rddma_source *src, struct gen
 	return result;
 }
 
-int get_inputs(void *s, char **command)
+int get_inputs(void **s, char **command)
 {
-	struct gengetopt_args_info *opts = (struct gengetopt_args_info *)s;
+	struct gengetopt_args_info *opts = *s;
 	*command = *opts->inputs++;
 	return opts->inputs_num--;
 }
