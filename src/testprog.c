@@ -3,15 +3,10 @@
 #include <pthread.h>
 #include <tp_cmdline.h>
 
-
 /*
  * The following is iffy, pseudo-code to help thrash out the API design.
- *
- * The command and the element stuff may get coalesced into a single
- * concept, basically both are partial implementations of closures so
- * I may just go the whole hog and implement that wholesale.
- *
  */
+
 /* A sample closure... */
 void *do_pipe(void **e, char *result)
 {
@@ -144,10 +139,8 @@ void **parse_pipe(struct rddma_dev *dev, void *ah, char *cmd)
 /* An example of application processing style, in this case Blocking Ordered */
 int test_BO(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_args_info *opts)
 {
-	int i;
 	char *output;
 	char *cmd = NULL;
-	int size = 0;
 	int result = 1;
 	void **e;
 	void *done;
@@ -184,7 +177,6 @@ int test_BO(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_ar
  * driver invocation, ie Blocked Interleaved Ordered. */
 int test_NBIO(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_args_info *opts)
 {
-	int size = 0;
 	char *cmd = NULL;
 	char *output;
 	int result = 1;
@@ -254,10 +246,8 @@ int test_NBOO(struct rddma_dev *dev,struct rddma_source *src, struct gengetopt_a
 {
 	int i = 0;
 	int count = 0;
-	int size = 0;
 	char *cmd = NULL;
 
-	char *output;
 	int result = 0;
 	void *ah;
 	pthread_t tid[100];
@@ -290,9 +280,7 @@ int test_AIOE(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_
 {
 	int i;
 	int count = 0;
-	int size = 0;
 	char *cmd = NULL;
-	char *output;
 	int result = 0;
 	void *ah;
 	pthread_t tid[100];
@@ -403,4 +391,6 @@ int main (int argc, char **argv)
 	}
 
 	rddma_close(dev);
+
+	return 0;
 }

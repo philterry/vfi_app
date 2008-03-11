@@ -83,5 +83,5 @@ int main (int argc, char **argv)
 	io_destroy(ctx);
 	close(afd);
 	rddma_close(dev);
-	
+	return 0;
 }
