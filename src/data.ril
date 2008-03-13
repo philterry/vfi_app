@@ -8,9 +8,7 @@ smb_map://ob.me.fabric#2000:2000?map_name(om1)
 bind_create://dma.me.fabric:2000/ib.me.fabric?event_name(ping)=ob.you.fabric
 bind_create://dma.me.fabric:2000/ib.you.fabrc=ob.me.fabric#2000?event_name(ping)
 
-event_create://ping.me.fabric?event_name(e1)
-
-pipe://im1<show(e1)>om1
+pipe://im1<show(ping)>om1
 
 start_event://ping.me.fabric
 

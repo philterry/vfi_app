@@ -34,7 +34,7 @@ static char *parse_location(char *str)
 	return loc;
 }
 
-void **parse_bind_cmd(struct rddma_dev *dev, void *ah, char *cmd)
+void **parse_bind_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
 {
 	/* bind_create://x.xl.f/d.dl.f?event_name(dn)=s.sl.f?event_name(sn) */
 
@@ -69,7 +69,7 @@ int get_extent(char *str)
 	return extent;
 }
 
-void **parse_smb_mmap_cmd(struct rddma_dev *dev, void *ah, char *cmd)
+void **parse_smb_mmap_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
 {
 	/* smb_mmap://smb.loc.f#off:ext?map_name(name),mmap_offset(mapid) */
 	char *name;
@@ -81,10 +81,10 @@ void **parse_smb_mmap_cmd(struct rddma_dev *dev, void *ah, char *cmd)
 	int flags = MAP_SHARED;
 
 	if (rddma_get_str_arg(cmd,"map_name",&name) > 0) {
-		rddma_invoke_cmd(dev,ah,cmd);
+		rddma_invoke_cmd(dev,"%s?request(%p)\n",cmd,ah);
 		rddma_wait_async_handle(ah,&result,(void *)&e);
 		offset = rddma_get_hex_arg(result,"mmap_offset");
-		mem = mmap(0, get_extent(cmd), prot, flags, dev->fd, offset);
+		mem = mmap(0, get_extent(cmd), prot, flags, rddma_fileno(dev), offset);
 		rddma_register_map(dev,name,mem);
 		free(result);
 		return mem;
@@ -92,7 +92,7 @@ void **parse_smb_mmap_cmd(struct rddma_dev *dev, void *ah, char *cmd)
 	return 0;
 }
 
-void **parse_smb_create_cmd(struct rddma_dev *dev, void *ah, char *cmd)
+void **parse_smb_create_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
 {
 	/* smb_create://smb.loc.f#off:ext?map_name(name) */
 	char *name;
@@ -101,7 +101,7 @@ void **parse_smb_create_cmd(struct rddma_dev *dev, void *ah, char *cmd)
 
 	if (rddma_get_str_arg(cmd,"map_name",&name) > 0) {
 		char *new_cmd;
-		rddma_invoke_cmd(dev,ah,cmd);
+		rddma_invoke_cmd(dev,"%s?request(%p)\n",cmd,ah);
 		rddma_wait_async_handle(ah,&result,(void *)&e);
 		memcpy(result,"  smb_mmap",10);
 		new_cmd = malloc(strlen(result)+12+strlen(name));
@@ -153,7 +153,7 @@ void *do_pipe(void **e, char *result)
 }
 
 /* A sample internal command to create and deliver a closure... */
-void **parse_pipe(struct rddma_dev *dev, void *ah, char *cmd)
+void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
 {
 /* pipe://[<inmap><]*<func>[(<event>[,<event]*)][><omap>]*  */
 
