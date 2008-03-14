@@ -22,7 +22,7 @@ int main (int argc, char **argv)
 
 	/* Prepare asynchronous I/O request */
 	iocb = malloc(sizeof(struct iocb));
-	asyio_prep_pwrite(iocb, dev->fd, argv[1], 1 + strlen(argv[1]),
+	asyio_prep_pwrite(iocb, rddma_fileno(dev), argv[1], 1 + strlen(argv[1]),
 		  0, afd);
 	iocb->aio_data = (u_int64_t) 0x5354;  /* dummy value for now */
 
@@ -72,7 +72,7 @@ int main (int argc, char **argv)
 			 * contents.
 			 *
 			 */
-			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
+			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, rddma_fileno(dev), t_id);
 			printf ("mmaped to %p\n", mapping);
 			if (mapping && (~((size_t)mapping))) memset (mapping, 0, 512);
 		}

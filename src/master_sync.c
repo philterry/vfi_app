@@ -211,7 +211,7 @@ int smb_mmap(struct rddma_dev *dev,char *name, char *loc, int offset, int len, v
 	tid_s = strcasestr (reply, "mmap_offset(");
 	unsigned long t_id = strtoul (tid_s + 12,0,16);
 	printf ("mmap... %08lx\n", t_id);
-	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, dev->fd, t_id);
+	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, rddma_fileno(dev), t_id);
 	if ((unsigned long) mapping == -1) {
 		*buf = NULL;
 		perror("mmap failed");
@@ -545,8 +545,7 @@ done:
 #endif
 done:
 #ifndef NOTARGET
-	fclose(dev->file);
-	close(dev->fd);
+	close(rddma_fileno(dev));
 #else
 	rddma_close(dev);
 #endif

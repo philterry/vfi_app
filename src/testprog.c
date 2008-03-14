@@ -46,7 +46,7 @@ void *do_pipe(void **e, char *result)
 }
 
 /* A sample internal command to create and deliver a closure... */
-void **parse_pipe(struct rddma_dev *dev, void *ah, char *cmd)
+void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
 {
 /* pipe://[<inmap><]*<func>[(<event>[,<event]*)][><omap>]*  */
 
