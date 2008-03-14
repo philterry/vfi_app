@@ -190,7 +190,7 @@ int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, 
 
 	execute_rddma_string(dev,output,&reply);
 
-	ret = get_error_code(output);
+	ret = get_error_code(reply);
 	if (ret) {
 		free(reply);
 		return (ret);
@@ -247,7 +247,7 @@ int smb_create(struct rddma_dev *dev, char *name, char *loc, int offset, int len
 
 	execute_rddma_string(dev,output,&reply);
 
-	ret = get_error_code(output);
+	ret = get_error_code(reply);
 	free(reply);
 	if (ret)
 		return (ret);
