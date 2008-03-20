@@ -81,7 +81,7 @@ void **parse_smb_mmap_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, 
 	int flags = MAP_SHARED;
 
 	if (rddma_get_str_arg(cmd,"map_name",&name) > 0) {
-		rddma_invoke_cmd(dev,"%s?request(%p)\n",cmd,ah);
+		rddma_invoke_cmd(dev,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
 		rddma_wait_async_handle(ah,&result,(void *)&e);
 		offset = rddma_get_hex_arg(result,"mmap_offset");
 		mem = mmap(0, get_extent(cmd), prot, flags, rddma_fileno(dev), offset);
@@ -101,7 +101,7 @@ void **parse_smb_create_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah
 
 	if (rddma_get_str_arg(cmd,"map_name",&name) > 0) {
 		char *new_cmd;
-		rddma_invoke_cmd(dev,"%s?request(%p)\n",cmd,ah);
+		rddma_invoke_cmd(dev,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
 		rddma_wait_async_handle(ah,&result,(void *)&e);
 		memcpy(result,"  smb_mmap",10);
 		new_cmd = malloc(strlen(result)+12+strlen(name));
@@ -254,7 +254,7 @@ void *source_thread(void *source)
 	while (rddma_get_cmd(src,&cmd)) {
 		rddma_set_async_handle(ah,NULL);
 		if (!rddma_find_pre_cmd(src->d, ah, cmd)) {
-			rddma_invoke_cmd(src->d,"%s?request(%p)\n",cmd,ah);
+			rddma_invoke_cmd(src->d,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
 			rddma_wait_async_handle(ah,&result,(void *)&e);
 			rddma_invoke_closure(e);
 		}
@@ -327,14 +327,16 @@ int main (int argc, char **argv)
 
 	if (opts.interactive_given) {
 		if (!rddma_setup_file(dev,&src,stdin))
-			ut =process_commands(&user_tid, src, &opts) == 0;
+			ut = process_commands(&user_tid, src, &opts) == 0;
 	}
 
-	if (ft)	pthread_join(file_tid,0);
+	if (ft) pthread_join(file_tid,0);
 	if (ot) pthread_join(opts_tid,0);
 	if (ut) pthread_join(user_tid,0);
 
 	done = 1;
 	pthread_join(driver_tid,NULL);
+	rddma_close(dev);
+
 	return 0;
 }
