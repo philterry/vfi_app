@@ -19,6 +19,7 @@ src/Makefile
 src/testprog
 src/testprog_async
 src/local_dma_test
+src/local_dma_chain_test
 stamp-h1
 src/frmwrk
 src/master_sync
