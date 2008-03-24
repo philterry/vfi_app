@@ -7030,73 +7030,73 @@ AC_SUBST([am__tar])
 AC_SUBST([am__untar])
 ]) # _AM_PROG_TAR
 
-AC_DEFUN([MMC_PATH_RDDMA_API],
-[ AC_CACHE_CHECK(if we have path to RDMA_API,mmc_cv_have_rddma_api,
+AC_DEFUN([VFI_PATH_VFI_API],
+[ AC_CACHE_CHECK(if we have path to VFI_API,vfi_cv_have_vfi_api,
 [ 
 
-rddma_api_cflags=""
-rddma_api_libs=""
+vfi_api_cflags=""
+vfi_api_libs=""
 
 here=`pwd`
 cd ${srcdir}
 there=`pwd`
 cd ${here}
 
-if test -d ${srcdir}/rddma_api ; then
-    rddma_api_cflags="-I${there}/rddma_api/src"
-    rddma_api_libs="{there}/rddma_api/src/librddma_api.la"
-else if test -d ${srcdir}/../rddma_api ; then
-    rddma_api_cflags="-I`dirname ${there}`/rddma_api/src"
-    rddma_api_libs="`dirname ${there}`/rddma_api/src/librddma_api.la"
-else if test -d ${srcdir}/../../mmc_rddma_api ; then
-    rddma_api_cflags="-I`dirname \`dirname ${there}\``/rddma_api/src"
-    rddma_api_libs="`dirname \`dirname ${there}\``/rddma_api/src/librddma_api.la"
+if test -d ${srcdir}/vfi_api ; then
+    vfi_api_cflags="-I${there}/vfi_api/src"
+    vfi_api_libs="{there}/vfi_api/src/libvfi_api.la"
+else if test -d ${srcdir}/../vfi_api ; then
+    vfi_api_cflags="-I`dirname ${there}`/vfi_api/src"
+    vfi_api_libs="`dirname ${there}`/vfi_api/src/libvfi_api.la"
+else if test -d ${srcdir}/../../vfi_api ; then
+    vfi_api_cflags="-I`dirname \`dirname ${there}\``/vfi_api/src"
+    vfi_api_libs="`dirname \`dirname ${there}\``/vfi_api/src/libvfi_api.la"
 else
 
-AC_ARG_WITH(rddma_api-prefix,
-		[ --with-rddma_api-prefix=DIR Prefix where the RDDMA_API is installed (optional)],
-		rddma_api_prefix=$withval, rddma_api_prefix="")
-AC_ARG_WITH(rddma_api-exec-prefix,
-		[ --with-rddma_api-exec-prefix=DIR Exec prefix where the RDDMA_API is installed (optional)],
-		rddma_api_exec_prefix=$withval, rddma_api_exec_prefix="")
+AC_ARG_WITH(vfi_api-prefix,
+		[ --with-vfi_api-prefix=DIR Prefix where the VFI_API is installed (optional)],
+		vfi_api_prefix=$withval, vfi_api_prefix="")
+AC_ARG_WITH(vfi_api-exec-prefix,
+		[ --with-vfi_api-exec-prefix=DIR Exec prefix where the VFI_API is installed (optional)],
+		vfi_api_exec_prefix=$withval, vfi_api_exec_prefix="")
 
-if test "x${rddma_api_exec_prefix}" != x ; then
-	rddma_apiconfig_args="${rddma_apiconfig_args} --exec-prefix=${rddma_api_exec_prefix}"
-	if test "x${RDDMA_APICONFIG+set}" != xset ; then
-		RDDMA_APICONFIG="${rddma_api_exec_prefix}/bin/mmcrddma_api-config"
+if test "x${vfi_api_exec_prefix}" != x ; then
+	vfi_apiconfig_args="${vfi_apiconfig_args} --exec-prefix=${vfi_api_exec_prefix}"
+	if test "x${VFI_APICONFIG+set}" != xset ; then
+		VFI_APICONFIG="${vfi_api_exec_prefix}/bin/vfi_api-config"
 	fi
 fi 
-if test "x${rddma_api_prefix}" != x ; then
-	rddma_apiconfig_args="${rddma_apiconfig_args} --prefix=${rddma_api_prefix}"
-	if test "x${RDDMA_APICONFIG+set}" != xset ; then
-		RDDMA_APICONFIG="${rddma_api_prefix}/bin/mmcrddma_api-config"
+if test "x${vfi_api_prefix}" != x ; then
+	vfi_apiconfig_args="${vfi_apiconfig_args} --prefix=${vfi_api_prefix}"
+	if test "x${VFI_APICONFIG+set}" != xset ; then
+		VFI_APICONFIG="${vfi_api_prefix}/bin/vfi_api-config"
 	fi
 fi 
 
-AC_PATH_PROG(RDDMA_APICONFIG, mmcrddma_api-config, nope)
+AC_PATH_PROG(VFI_APICONFIG, vfi_api-config, nope)
 
-if test "${RDDMA_APICONFIG}" = nope ; then
-	mmc_cv_have_rddma_api="have_rddma_api=no rddma_api_cflags=\"\" rddma_api_libs=\"\""
-	AC_MSG_ERROR("Make sure mmcrddma_api-config is in your path or set RDDMA_APICONFIG or use --with-rddma_api-[exec]-prefix")
+if test "${VFI_APICONFIG}" = nope ; then
+	vfi_cv_have_vfi_api="have_vfi_api=no vfi_api_cflags=\"\" vfi_api_libs=\"\""
+	AC_MSG_ERROR("Make sure vfi_api-config is in your path or set VFI_APICONFIG or use --with-vfi_api-[exec]-prefix")
 fi
 
-rddma_api_cflags=`${RDDMA_APICONFIG} ${rddma_apiconfig_args} --cflags`
-rddma_api_libs=`${RDDMA_APICONFIG} ${rddma_apiconfig_args} --libs`
+vfi_api_cflags=`${VFI_APICONFIG} ${vfi_apiconfig_args} --cflags`
+vfi_api_libs=`${VFI_APICONFIG} ${vfi_apiconfig_args} --libs`
 
 fi
 fi
 fi
 
-mmc_cv_have_rddma_api="have_rddma_api=yes rddma_api_cflags=\"${rddma_api_cflags}\" rddma_api_libs=\"${rddma_api_libs}\""
+vfi_cv_have_vfi_api="have_vfi_api=yes vfi_api_cflags=\"${vfi_api_cflags}\" vfi_api_libs=\"${vfi_api_libs}\""
 
 ])
 
-eval ${mmc_cv_have_rddma_api}
+eval ${vfi_cv_have_vfi_api}
 
-RDDMA_API_CFLAGS="${rddma_api_cflags}"
-AC_SUBST(RDDMA_API_CFLAGS)
-RDDMA_API_LIBS="${rddma_api_libs}"
-AC_SUBST(RDDMA_API_LIBS)
+VFI_API_CFLAGS="${vfi_api_cflags}"
+AC_SUBST(VFI_API_CFLAGS)
+VFI_API_LIBS="${vfi_api_libs}"
+AC_SUBST(VFI_API_LIBS)
 
 ])
 

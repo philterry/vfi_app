@@ -1,14 +1,14 @@
-#include <rddma_api.h>
+#include <vfi_api.h>
 
-/* Simple example app using RDDMA with chained events.
+/* Simple example app using VFI with chained events.
 /* It creates 3 local SMBS, fills one with data, uses the 
  * DMA engine to copy one SMB to another, and compares
  * the source and destination SMB
  */
 
 /* 
- * Build with DBG defined to echo strings sent to and received from RDDMA.
- * Build with NOTARGET defined to just generate RDDMA command strings and
+ * Build with DBG defined to echo strings sent to and received from VFI.
+ * Build with NOTARGET defined to just generate VFI command strings and
  * write them to a file call "junk".
  */
 #define DBG
@@ -19,7 +19,7 @@
 #endif
 
 /*
- * Extract the integer RDDMA return code from "result(n)"
+ * Extract the integer VFI return code from "result(n)"
  */
 int get_error_code(char *s) 
 {
@@ -31,7 +31,7 @@ int get_error_code(char *s)
 		return 0;
 
 	if (res == NULL) {
-		printf("missing result in rddma reply string!\n"
+		printf("missing result in vfi reply string!\n"
 		       "String is: %s\n", s);
 		return -1;
 	}
@@ -40,26 +40,26 @@ int get_error_code(char *s)
 	return (ret);
 }
 
-/* Send string 'str' to rddma driver.
+/* Send string 'str' to vfi driver.
  * The string will be overwritten by the reply from the driver.
  */
-void execute_rddma_string(struct rddma_dev *dev, char *str, char **reply)
+void execute_vfi_string(struct vfi_dev *dev, char *str, char **reply)
 {
 #ifdef DBG
 	printf("%s\n", str);
 #endif
 #ifdef NOTARGET
-	rddma_invoke_cmd_str(dev,str,0);
+	vfi_invoke_cmd_str(dev,str,0);
 	*reply = NULL;
 #else
- 	rddma_do_cmd_str(dev,reply,str,0);
+ 	vfi_do_cmd_str(dev,reply,str,0);
 #ifdef DBG
 	printf("reply = %s\n", *reply);
 #endif
 #endif
 }
 
-int bind_create(struct rddma_dev *dev,char *name, char *loc, int len, 
+int bind_create(struct vfi_dev *dev,char *name, char *loc, int len, 
 	char *destname, char *destloc, int destoff, char *destevent,
 	char *srcname, char *srcloc, int srcoff, char *srcevent)
 {
@@ -119,13 +119,13 @@ int bind_create(struct rddma_dev *dev,char *name, char *loc, int len,
 		strcat(output,temp);
 	}
 bind_string_ready:
-	execute_rddma_string(dev,output,&reply);
+	execute_vfi_string(dev,output,&reply);
 	ret = get_error_code(reply);
 	free(reply);
 	return ret;
 }
 
-int event_start(struct rddma_dev *dev, char *name, char *loc, int wait)
+int event_start(struct vfi_dev *dev, char *name, char *loc, int wait)
 {
 	char output[1000];
 	char *reply;
@@ -137,14 +137,14 @@ int event_start(struct rddma_dev *dev, char *name, char *loc, int wait)
 		strcat(output,loc);
 	}
 
-	execute_rddma_string(dev,output,&reply);
+	execute_vfi_string(dev,output,&reply);
 
 	ret = get_error_code(reply);
 	free(reply);
 	return ret;
 }
 
-int event_chain(struct rddma_dev *dev, char *name, char *loc, char *toname)
+int event_chain(struct vfi_dev *dev, char *name, char *loc, char *toname)
 {
 	char output[1000];
 	char *reply;
@@ -160,14 +160,14 @@ int event_chain(struct rddma_dev *dev, char *name, char *loc, char *toname)
 	strcat(output, toname);
 	strcat(output, ")");
 
-	execute_rddma_string(dev,output,&reply);
+	execute_vfi_string(dev,output,&reply);
 
 	ret = get_error_code(reply);
 	free(reply);
 	return ret;
 }
 
-int xfer_create(struct rddma_dev *dev, char *name, char *loc)
+int xfer_create(struct vfi_dev *dev, char *name, char *loc)
 {
 	char output[1000];
 	char *reply;
@@ -179,15 +179,15 @@ int xfer_create(struct rddma_dev *dev, char *name, char *loc)
 		strcat(output,loc);
 	}
 
-	execute_rddma_string(dev,output,&reply);
+	execute_vfi_string(dev,output,&reply);
 
 	ret = get_error_code(reply);
 	free(reply);
 	return ret;
 }
 
-/* Does the RDDMA smb_mmap, then call libc to actually do the mapping */
-int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, void **buf) 
+/* Does the VFI smb_mmap, then call libc to actually do the mapping */
+int smb_mmap(struct vfi_dev *dev, char *name, char *loc, int offset, int len, void **buf) 
 {
 	char output[1000];
 	char *reply;
@@ -212,7 +212,7 @@ int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, 
 		strcat(output,temp);
 	}
 
-	execute_rddma_string(dev,output,&reply);
+	execute_vfi_string(dev,output,&reply);
 
 	ret = get_error_code(reply);
 	if (ret) {
@@ -231,9 +231,9 @@ int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, 
 	* where (x) is the offset, in hex, that we need to use
 	* with actual mmap calls to map the target area.
 	*/
-	unsigned long t_id = rddma_get_hex_arg (reply, "mmap_offset");
+	unsigned long t_id = vfi_get_hex_arg (reply, "mmap_offset");
 	printf ("mmap... %08lx\n", t_id);
-	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, rddma_fileno(dev), t_id);
+	mapping = mmap (0, len, PROT_READ | PROT_WRITE, MAP_SHARED, vfi_fileno(dev), t_id);
 	if ((unsigned long) mapping == -1) {
 		*buf = NULL;
 		perror("mmap failed");
@@ -247,7 +247,7 @@ int smb_mmap(struct rddma_dev *dev, char *name, char *loc, int offset, int len, 
  * if map==1, *buf is a pointer to the SMB.  Otherwise SMB will be created
  * but not accessible from userland.  
  */
-int smb_create(struct rddma_dev *dev, char *name, char *loc, int offset, int len, int map, void **buf) 
+int smb_create(struct vfi_dev *dev, char *name, char *loc, int offset, int len, int map, void **buf) 
 {
 	char output[1000];
 	char *reply;
@@ -269,7 +269,7 @@ int smb_create(struct rddma_dev *dev, char *name, char *loc, int offset, int len
 		strcat(output,temp);
 	}
 
-	execute_rddma_string(dev,output,&reply);
+	execute_vfi_string(dev,output,&reply);
 
 	ret = get_error_code(reply);
 	free(reply);
@@ -309,7 +309,7 @@ void add_opt(char *base, char *option)
 
 /* flags SYSROOT, SYSREMOTE, RIO_FABRIC, NET_FABRIC, RIO_DMA */
 /* Returns status code */
-int location_create(struct rddma_dev *dev, char *s, unsigned int flags, int node) 
+int location_create(struct vfi_dev *dev, char *s, unsigned int flags, int node) 
 {
 	char output[1000];
 	char *reply;
@@ -342,12 +342,12 @@ int location_create(struct rddma_dev *dev, char *s, unsigned int flags, int node
 	}
 
 	if (flags & RIO_FABRIC) 
-		add_opt(output, "fabric(rddma_fabric_rionet)");
+		add_opt(output, "fabric(vfi_fabric_rionet)");
 	else if (flags & NET_FABRIC) 
-		add_opt(output,"fabric(rddma_fabric_net)");
+		add_opt(output,"fabric(vfi_fabric_net)");
 
 	if (flags & RIO_DMA) 
-		add_opt(output, "dma_name(rddma_rio_dma)");
+		add_opt(output, "dma_name(vfi_rio_dma)");
 	else if (flags & PPC8245_DMA) 
 		add_opt(output,"dma_name(ppc8245)");
 
@@ -360,7 +360,7 @@ int location_create(struct rddma_dev *dev, char *s, unsigned int flags, int node
 		}
 	}
 
-	execute_rddma_string(dev,output,&reply);
+	execute_vfi_string(dev,output,&reply);
 
 	ret = get_error_code(reply);
 	free(reply);
@@ -373,7 +373,7 @@ int location_create(struct rddma_dev *dev, char *s, unsigned int flags, int node
 int main (int argc, char **argv)
 {
 
-	struct rddma_dev *dev;
+	struct vfi_dev *dev;
 	int failed = 0;
 	unsigned int *buf1=NULL;
 	unsigned int *buf2=NULL;
@@ -383,7 +383,7 @@ int main (int argc, char **argv)
 	int ret;
 	char *output;
 
-	printf("Opening /dev/rddma...");
+	printf("Opening /dev/vfi...");
 #ifdef NOTARGET
 	dev = calloc(1,sizeof(*dev));
 	dev->fd = open("junk",O_RDWR | O_CREAT);
@@ -396,7 +396,7 @@ int main (int argc, char **argv)
 	dev->file = fdopen(dev->fd,"r+");
 	dev->timeout = -1;
 #else
-	rddma_open(&dev,0,-1);
+	vfi_open(&dev,0,-1);
 #endif
 
 	ret = location_create(dev,"fred12", PRIVATE_OPS | RIO_DMA | RIO_FABRIC, 0);
@@ -546,7 +546,7 @@ done:
 
 
 #if 0
-	/* Add a bunch of rddma *_delete calls here... once they're fixed */
+	/* Add a bunch of vfi *_delete calls here... once they're fixed */
 	xfer_delete("xf","fred12");  /* assumes xfer_delete gets rid of all binds */
 	event_delete("s","fred12");  /* ? */
 	event_delete("t","fred12");  /* ? */
@@ -556,6 +556,6 @@ done:
 	smb_delete("buf1", "fred12");
 	location_delete("fred12");
 #endif
-	rddma_close(dev);
+	vfi_close(dev);
 	
 }

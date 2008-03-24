@@ -1,9 +1,9 @@
-#include <rddma_api.h>
+#include <vfi_api.h>
 
 int main (int argc, char **argv)
 {
 	int afd;
-	struct rddma_dev *dev;
+	struct vfi_dev *dev;
 	struct iocb *iocb;
 	static struct io_event events[1];
 	aio_context_t ctx = 0;
@@ -13,16 +13,16 @@ int main (int argc, char **argv)
 	char *output;
 
 	/* Initialize event fd */
-	if ((afd = rddma_get_eventfd(0)) < 0) {
+	if ((afd = vfi_get_eventfd(0)) < 0) {
 		perror("eventfd");
 		return 2;
 	}
 
-	rddma_open(&dev,NULL,0);
+	vfi_open(&dev,NULL,0);
 
 	/* Prepare asynchronous I/O request */
 	iocb = malloc(sizeof(struct iocb));
-	asyio_prep_pwrite(iocb, rddma_fileno(dev), argv[1], 1 + strlen(argv[1]),
+	asyio_prep_pwrite(iocb, vfi_fileno(dev), argv[1], 1 + strlen(argv[1]),
 		  0, afd);
 	iocb->aio_data = (u_int64_t) 0x5354;  /* dummy value for now */
 
@@ -63,7 +63,7 @@ int main (int argc, char **argv)
 		 * where <x> is the offset, in hex, that we need to use
 		 * with actual mmap calls to map the target area.
 		 */
-		unsigned long t_id = rddma_get_hex_arg (output,"mmap_offset");
+		unsigned long t_id = vfi_get_hex_arg (output,"mmap_offset");
 		if (t_id) {
 			void* mapping;
 			printf ("mmap... %08lx\n", t_id);
@@ -72,7 +72,7 @@ int main (int argc, char **argv)
 			 * contents.
 			 *
 			 */
-			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, rddma_fileno(dev), t_id);
+			mapping = mmap (0, 512, PROT_READ | PROT_WRITE, MAP_SHARED, vfi_fileno(dev), t_id);
 			printf ("mmaped to %p\n", mapping);
 			if (mapping && (~((size_t)mapping))) memset (mapping, 0, 512);
 		}
@@ -82,6 +82,6 @@ int main (int argc, char **argv)
  	free(iocb); 
 	io_destroy(ctx);
 	close(afd);
-	rddma_close(dev);
+	vfi_close(dev);
 	return 0;
 }
