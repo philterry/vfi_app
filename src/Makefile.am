@@ -10,4 +10,3 @@ frmwrk_SOURCES = frmwrk.c fw_cmdline.c fw_cmdline.h
 %.h %.c:%.ggo
 	$(GGO) --file-name=$* < $< 
 
-EXTRA_DIST = testprog.ggo
