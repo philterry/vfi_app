@@ -4,6 +4,13 @@
 #include <fw_cmdline.h>
 #include <sys/mman.h>
 
+/* To store events and possibly closures */
+struct event_data {
+	char *name;       /* event name without location */
+	char *loc;        /* location i.e node.fabric or similar */
+	void **pipe;      /* closure */
+};
+
 int get_inputs(void **s, char **command)
 {
 	struct gengetopt_args_info *opts = *s;
@@ -29,7 +36,7 @@ static char *parse_location(char *str)
 	int start;
 	char *loc = NULL;
 	start = strcspn(str,".") + 1;
-	sscanf(str+start,"%a[^?=/]",&loc);
+	sscanf(str+start,"%a[^?=/:]",&loc);
 	printf("%s:loc(%s),start(%d),str(%s)\n",__FUNCTION__,loc,start,str);
 	return loc;
 }
@@ -40,6 +47,7 @@ void **parse_bind_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char
 
 	char *sl,*dl,*xl,*sen,*den;
 	int size;
+	struct event_data *sevtcl, *devtcl;
 	
 	sscanf(cmd,   "%a[^/]%n",&xl,&size);
 	sl = cmd + size;
@@ -52,8 +60,16 @@ void **parse_bind_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char
 	sl = parse_location(sl);
 	dl = parse_location(dl);
 
-	rddma_register_event(dev,sen,sl);
-	rddma_register_event(dev,den,dl);
+	sevtcl = calloc(1, sizeof(struct event_data));
+	sevtcl->name = sen;
+	sevtcl->loc = sl;
+
+	devtcl = calloc(1, sizeof(struct event_data));
+	devtcl->name = den;
+	devtcl->loc = dl;
+
+	rddma_register_event(dev,sen,sevtcl);
+	rddma_register_event(dev,den,devtcl);
 	printf("%s:sen(%s),sl(%s),den(%s),dl(%s),xl(%s)\n",__FUNCTION__,sen,sl,den,dl,xl);
 	free(xl);
 	return 0;
@@ -62,10 +78,12 @@ void **parse_bind_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char
 int get_extent(char *str)
 {
 	int extent = 0;
-	char *ext = strstr(str,":");
+	char *ext = strstr(str,"://");
+	
+	ext = ext ? strstr(++ext,":") : strstr(str,":"); 
 	if (ext)
 		sscanf(ext,":%x",&extent);
-	printf("%s:%s->%x\n",__FUNCTION__,str,extent);
+	/* printf("%s:%s->%x\n",__FUNCTION__,str,extent); */
 	return extent;
 }
 
@@ -115,6 +133,24 @@ void **parse_smb_create_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah
 	return 0;
 }
 
+void **parse_event_start_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
+{
+	/* even_start://name.loc */
+
+	char *name;
+	struct event_data *evtcl;
+
+	name = strstr(cmd, "://");
+	name += 3;
+	sscanf(name,   "%a[^.]",&name);
+
+	evtcl = rddma_find_event(dev,name);
+	rddma_set_async_handle(ah,evtcl->pipe);
+
+	free(name);
+	return 0;
+}
+
 void *do_pipe(void **e, char *result)
 {
 	char **imaps;
@@ -140,24 +176,43 @@ void *do_pipe(void **e, char *result)
 	omaps = (char **)&e[2+numi+nume];
 	numo = sig & 0xff;
 
+	/* printf("%s: numi(%d), nume(%d), numo(%d)\n", __func__, numi, nume, numo); */
+
 	for (i = 0; i < numi; i++)
-		printf("imap[%d](%s)\n",i,imaps[i]);
+		printf("%s: imap[%d](%p)\n",__func__,i,imaps[i]);
 
 	for (i = 0; i < nume; i++)
-		printf("evnt[%d](%d)\n",i,events[i]);
+		printf("%s: evnt[%d](%s)\n",__func__,i,events[i]);
 
 	for (i = 0; i < numo; i++)
-		printf("omap[%d](%s)\n",i,omaps[i]);
+		printf("%s: omap[%d](%p)\n",__func__,i,omaps[i]);
 
 	return events[nume-1];
 }
+
+
+static int do_chain(struct rddma_dev *dev, struct rddma_async_handle *ah, char *name, char *loc, char *next_name)
+{
+	/* event_chain://name.loc?event_name(next_name) */
+
+	char *result;
+	void **e;
+
+	rddma_set_async_handle(ah,NULL);
+	rddma_invoke_cmd(dev,"event_chain://%s.%s?event_name(%s),request(%p)\n",
+			 name,loc,next_name,ah);
+	rddma_wait_async_handle(ah,&result,(void *)&e);
+	
+	return 0;
+}
+
 
 /* A sample internal command to create and deliver a closure... */
 void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
 {
 /* pipe://[<inmap><]*<func>[(<event>[,<event]*)][><omap>]*  */
 
-	char *sp = cmd;
+	char *sp;
 	int size = 0;
 	int i = 0;
 	int numpipe = 0;
@@ -171,6 +226,15 @@ void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cm
 	int numevnts = 0;
 	void **pipe;
 	char *elem[20];
+	/* int cnt; */
+	struct event_data *evtcl;
+
+	/* printf("%s: cmd=%s\n", __func__, cmd); */
+
+	/* Make sure the we have a pointer to the first
+	   character after the "pipe://" part. */ 
+	sp = strstr (cmd, "://");
+	sp = sp ? sp += 3 : cmd;
 
 	while (*sp) {
 		if (sscanf(sp," %a[^<>,()]%n",&elem[i],&size) > 0) {
@@ -219,27 +283,42 @@ void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cm
 	if (outmaps)
 		numomaps = outmaps - events; 
 
+	/* for (cnt=0; cnt<i; cnt++) printf("%s: elem[%d]=%s\n", __func__, cnt, elem[cnt]); */
+
 	pipe = calloc(numpipe,sizeof(void *));
 	pipe[0] = rddma_find_func(dev,elem[func]);
+	/* printf("%s: pipe[0]=%p\n", __func__, pipe[0]); */
 	free(elem[func]);
 
 	for (i = 0; i< numimaps;i++) {
 		pipe[i+2] = rddma_find_map(dev,elem[i]);
+		/* printf("%s: pipe[i+2]=%p\n", __func__, (char *)pipe[i+2]); */
 		free(elem[i]);
 	}
 
 	for (i = 0; i< numevnts;i++) {
-		pipe[func+i+2] = rddma_find_event(dev,elem[func+i+1]);
+		evtcl = rddma_find_event(dev,elem[func+i+1]);
+		evtcl->pipe = pipe;
+		/* If we have more than 1 event then chain them together */
+		if ( (numevnts - i) > 1) {
+			do_chain (dev, ah, evtcl->name, evtcl->loc, elem[func+i+2]);
+		}
+		pipe[func+i+2] = evtcl->name;
+		/* printf("%s: pipe[func+i+2]=%s\n", __func__, (char *)pipe[func+i+2]); */
 		free(elem[func+i+1]);
 	}
 
 	for (i = 0; i< numomaps;i++) {
 		pipe[events+i+2] = rddma_find_map(dev,elem[events+i+1]);
+		/* printf("%s: pipe[events+i+2]=%p\n", __func__, (char *)pipe[events+i+2]); */
 		free(elem[events+i+1]);
 	}
 	pipe[1] = (void *)(((numimaps & 0xff) << 0) | ((numevnts & 0xff) << 8) | ((numomaps & 0xff) << 16));
 
 	pipe[1] =  (void *)((unsigned int)pipe[1] ^ (unsigned int)pipe[0]);
+
+	/* printf("%s: numi(%d), nume(%d), numo(%d)\n", __func__, numimaps, numevnts, numomaps); */
+
 	return pipe;
 }
 
@@ -252,6 +331,7 @@ void *source_thread(void *source)
 	struct rddma_source *src = (struct rddma_source *)source;
 	ah = rddma_alloc_async_handle(NULL);
 	while (rddma_get_cmd(src,&cmd)) {
+		/* printf("%s: cmd = %s\n", __func__, cmd); */
 		rddma_set_async_handle(ah,NULL);
 		if (!rddma_find_pre_cmd(src->d, ah, cmd)) {
 			rddma_invoke_cmd(src->d,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
@@ -281,6 +361,7 @@ int initialize_api_commands(struct rddma_dev *dev)
 {
 	rddma_register_func(dev,"show",do_pipe);
 
+	rddma_register_pre_cmd(dev,"event_start",parse_event_start_cmd);
 	rddma_register_pre_cmd(dev,"pipe",parse_pipe);
 	rddma_register_pre_cmd(dev,"bind_create",parse_bind_cmd);
 	rddma_register_pre_cmd(dev,"smb_create",parse_smb_create_cmd);
