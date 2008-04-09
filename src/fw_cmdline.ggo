@@ -2,4 +2,4 @@ args "--unamed-opts --default-optional"
 option "device" d "VFI device" string default="/dev/vfi"
 option "file" f "file of RIL directives" string multiple
 option "interactive" i "interactive shell"
-option "timeout" t "timeout" int default="-1"
+option "timeout" t "timeout" int default="1000"
