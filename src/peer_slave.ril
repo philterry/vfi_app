@@ -1,0 +1,5 @@
+location_find://fabric?dma_name(vfi_rio_dma),default_ops(public),fabric(vfi_fabric_rionet)
+location_find://slave.fabric
+location_find://master.fabric
+smb_create://buf1.slave.fabric:4000
+event_start://ping.slave.fabric
