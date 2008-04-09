@@ -4,13 +4,6 @@
 #include <fw_cmdline.h>
 #include <sys/mman.h>
 
-/* To store events and possibly closures */
-struct event_data {
-	char *name;       /* event name without location */
-	char *loc;        /* location i.e node.fabric or similar */
-	void **pipe;      /* closure */
-};
-
 int get_inputs(void **s, char **command)
 {
 	struct gengetopt_args_info *opts = *s;
@@ -31,194 +24,173 @@ int setup_inputs(struct vfi_dev *dev, struct vfi_source **src, struct gengetopt_
 	return 0;
 }
 
-static char *parse_location(char *str)
-{
-	int start;
-	char *loc = NULL;
-	start = strcspn(str,".") + 1;
-	sscanf(str+start,"%a[^?=/:]",&loc);
-	printf("%s:loc(%s),start(%d),str(%s)\n",__FUNCTION__,loc,start,str);
-	return loc;
-}
-
-void **parse_bind_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
+int bind_create_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
 {
 	/* bind_create://x.xl.f/d.dl.f?event_name(dn)=s.sl.f?event_name(sn) */
 
-	char *sl,*dl,*xl,*sen,*den;
+	char *sl=NULL,*dl=NULL,*xl=NULL,*dst=NULL,*sen=NULL,*den=NULL;
+	char *src;
 	int size;
-	struct event_data *sevtcl, *devtcl;
 	
-	sscanf(cmd,   "%a[^/]%n",&xl,&size);
-	sl = cmd + size;
-	sscanf(cmd+size,"%a[^=]%n",&dl,&size);
-	sl = sl + size;
+	sscanf(*cmd,   "%a[^/]%n",&xl,&size);
+	src = *cmd + size;
+	sscanf(*cmd+size,"%a[^=]%n",&dst,&size);
+	src = src + size;
 	
-	vfi_get_str_arg(sl,"event_name",&sen);
-	vfi_get_str_arg(dl,"event_name",&den);
+	vfi_get_str_arg(src,"event_name",&sen);
+	vfi_get_str_arg(dst,"event_name",&den);
 
-	sl = parse_location(sl);
-	dl = parse_location(dl);
+	vfi_get_location(src,&sl);
+	vfi_get_location(dst,&dl);
 
-	sevtcl = calloc(1, sizeof(struct event_data));
-	sevtcl->name = sen;
-	sevtcl->loc = sl;
+	vfi_register_event(dev,sen,sl);
+	vfi_register_event(dev,den,dl);
 
-	devtcl = calloc(1, sizeof(struct event_data));
-	devtcl->name = den;
-	devtcl->loc = dl;
-
-	vfi_register_event(dev,sen,sevtcl);
-	vfi_register_event(dev,den,devtcl);
 	printf("%s:sen(%s),sl(%s),den(%s),dl(%s),xl(%s)\n",__FUNCTION__,sen,sl,den,dl,xl);
-	free(xl);
+
+	free(xl);free(sl);free(dl);free(dst);free(sen);free(den);
+
 	return 0;
 }
 
-int get_extent(char *str)
+int smb_mmap_closure(void *e, struct vfi_dev *dev, struct vfi_async_handle *ah, char *result)
 {
-	int extent = 0;
-	char *ext = strstr(str,"://");
-	
-	ext = ext ? strstr(++ext,":") : strstr(str,":"); 
-	if (ext)
-		sscanf(ext,":%x",&extent);
-	/* printf("%s:%s->%x\n",__FUNCTION__,str,extent); */
-	return extent;
-}
-
-void **parse_smb_mmap_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
-{
-	/* smb_mmap://smb.loc.f#off:ext?map_name(name),mmap_offset(mapid) */
-	char *name = NULL;
-	char *result = NULL;
-	void **e;
 	long offset;
 	void *mem;
 	int prot = PROT_READ | PROT_WRITE;
 	int flags = MAP_SHARED;
 
-	if (vfi_get_str_arg(cmd,"map_name",&name) > 0) {
-		vfi_invoke_cmd(dev,"%s%srequest(%lx)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
-		vfi_wait_async_handle(ah,&result,(void *)&e);
-		offset = vfi_get_hex_arg(result,"mmap_offset");
-		mem = mmap(0, get_extent(cmd), prot, flags, vfi_fileno(dev), offset);
-		vfi_register_map(dev,name,mem);
-		free(result);
-		return mem;
+	struct vfi_map *p = e;
+	if ((offset = vfi_get_hex_arg(result,"mmap_offset"))) {
+		p->mem = mmap(0,p->extent,prot,flags,vfi_fileno(dev), offset);
+		vfi_register_map(dev,p->name,e);
+		vfi_set_async_handle(ah,NULL);
 	}
 	return 0;
 }
 
-void **parse_smb_create_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
+int smb_mmap_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
+{
+	char *name;
+	if (vfi_get_str_arg(*cmd,"map_name",&name) > 0) {
+		struct vfi_map *e;
+		if (!vfi_alloc_map(&e,name)) {
+			e->f = smb_mmap_closure;
+			vfi_get_extent(*cmd,&e->extent);
+			free(vfi_set_async_handle(ah,e));
+		}
+		free(name);
+	}
+	return 0;
+}
+
+int smb_create_closure(void *e, struct vfi_dev *dev, struct vfi_async_handle *ah, char **result)
+{
+	int i;
+	char *smb;
+	struct {void *f; char *name; char **cmd;} *p = e;
+	struct vfi_map *me;
+	vfi_alloc_map(&me,p->name);
+	sscanf(*result+strlen("smb_create://"),"%a[^?]",&smb);
+	sprintf(*p->cmd,"smb_mmap://%s?map_name(%s)\n",smb,p->name);
+	free(smb);
+	me->f = smb_mmap_closure;
+	vfi_get_extent(*result,&me->extent);
+	free(p->name);
+	free(vfi_set_async_handle(ah,me));
+	return 0;
+}
+
+int smb_create_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
 {
 	/* smb_create://smb.loc.f#off:ext?map_name(name) */
-	char *name = NULL;
+	char *name;
 	char *result = NULL;
 	void **e;
 
-	if (vfi_get_str_arg(cmd,"map_name",&name) > 0) {
-		char *new_cmd;
-		vfi_invoke_cmd(dev,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
-		vfi_wait_async_handle(ah,&result,(void *)&e);
-		memcpy(result,"  smb_mmap",10);
-		new_cmd = malloc(strlen(result)+12+strlen(name));
-		sprintf(new_cmd,"%s,map_name(%s)",result+2,name);
-		e = parse_smb_mmap_cmd(dev, ah, new_cmd);
-		free(result);
-		free(name);
-		free(new_cmd);
-		return e;
+	if (vfi_get_str_arg(*cmd,"map_name",&name) > 0) {
+		struct {void *f; char *name; char **cmd;} *e = calloc(1,sizeof(*e));
+		if (e) {
+			e->f =smb_create_closure;
+			e->name = name;
+			e->cmd = cmd;
+			free(vfi_set_async_handle(ah,e));
+		}
 	}
 	return 0;
 }
 
-void **parse_event_start_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
+int event_find_closure(void *e, struct vfi_dev *dev, struct vfi_async_handle *ah, char **result)
 {
-	/* even_start://name.loc */
-
+	/* event_find://name.location */
 	char *name;
-	struct event_data *evtcl;
+	char *location;
+	int err;
 
-	name = strstr(cmd, "://");
-	name += 3;
-	sscanf(name,   "%a[^.]",&name);
-
-	/* 
-	 * The event will only be found on the node you did the bind.
-	 * An event may or may not have a closure.
-	 */
-	evtcl = vfi_find_event(dev,name);
-	if (evtcl && evtcl->pipe)
-		vfi_set_async_handle(ah,evtcl->pipe);
-
-	free(name);
+	err = vfi_get_dec_arg(*result,"result");
+	if (!err) {
+		err = vfi_get_name_location(*result,&name,&location);
+		if (!err) {
+			vfi_register_event(dev,name,location);
+			free(name);free(location);
+		}
+	}
 	return 0;
 }
 
-void *do_pipe(void **e, char *result)
+int event_find_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
 {
-	char **imaps;
-	int  **events;
-	char **omaps;
+	/* event_find://name.location */
+	free(vfi_set_async_handle(ah,event_find_closure));
+	return 0;
+}
+
+/* A sample internal function of the sort which can be invoked by the
+ * pipe API pre-command in conjunction with the source processing loop
+ * thread. This function is polymorphic in that it parses its
+ * signature to determine its input/output parameters. In reality real
+ * functions would at most simply check their signature as a debug
+ * reality check before processing their fixed function. */
+void *show_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, char *result)
+{
+	struct vfi_map **imaps;
+	struct vfi_map **omaps;
 	int numi;
-	int nume;
 	int numo;
 	int i;
 
-	int sig = (unsigned int)e[1] ^ (unsigned int)do_pipe;
+	int sig = (unsigned int)e[1] ^ (unsigned int)show_function;
 	
-	if (sig & ~0xffffff)
+	if (sig & ~0xffff)
 		return NULL;
-	imaps = (char **)&e[2];
+
+	imaps = (struct vfi_map **)&e[2];
 	numi = sig & 0xff;
+
 	sig >>= 8;
 
-	events = (int **)&e[2+numi];
-	nume = sig & 0xff;
-	sig >>= 8;
-
-	omaps = (char **)&e[2+numi+nume];
+	omaps = (struct vfi_map **)&e[2+numi];
 	numo = sig & 0xff;
 
 	/* printf("%s: numi(%d), nume(%d), numo(%d)\n", __func__, numi, nume, numo); */
 
 	for (i = 0; i < numi; i++)
-		printf("%s: imap[%d](%p)\n",__func__,i,imaps[i]);
-
-	for (i = 0; i < nume; i++)
-		printf("%s: evnt[%d](%s)\n",__func__,i,events[i]);
+		printf("imap[%d](%s)%d\n",i,imaps[i]->name,imaps[i]->extent);
 
 	for (i = 0; i < numo; i++)
-		printf("%s: omap[%d](%p)\n",__func__,i,omaps[i]);
+		printf("omap[%d](%s)%d\n",i,omaps[i]->name,omaps[i]->extent);
 
-	return events[nume-1];
+	return e;
 }
 
-
-static int do_chain(struct vfi_dev *dev, struct vfi_async_handle *ah, char *name, char *loc, char *next_name)
+/* The API pre-command to create and deliver a closure which executes
+ * the named function on the named maps, invokes the chained events,
+ * and is reinvoked on completion of the chained events. */
+int pipe_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
 {
-	/* event_chain://name.loc?event_name(next_name) */
+/* pipe://[<inmap><]*<func>[(<event>[,<event>]*)][><omap>]*  */
 
-	char *result = NULL;
-	void **e;
-
-	vfi_set_async_handle(ah,NULL);
-	vfi_invoke_cmd(dev,"event_chain://%s.%s?event_name(%s),request(%lx)\n",
-			 name,loc,next_name,ah);
-	vfi_wait_async_handle(ah,&result,(void *)&e);
-	free (result);
-	
-	return 0;
-}
-
-
-/* A sample internal command to create and deliver a closure... */
-void **parse_pipe(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
-{
-/* pipe://[<inmap><]*<func>[(<event>[,<event]*)][><omap>]*  */
-
-	char *sp;
+	char *sp = *cmd;
 	int size = 0;
 	int i = 0;
 	int numpipe = 0;
@@ -232,15 +204,9 @@ void **parse_pipe(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
 	int numevnts = 0;
 	void **pipe;
 	char *elem[20];
-	/* int cnt; */
-	struct event_data *evtcl;
-
-	/* printf("%s: cmd=%s\n", __func__, cmd); */
-
-	/* Make sure the we have a pointer to the first
-	   character after the "pipe://" part. */ 
-	sp = strstr (cmd, "://");
-	sp = sp ? sp += 3 : cmd;
+	void *e;
+	char *result = NULL;
+	char *eloc;
 
 	while (*sp) {
 		if (sscanf(sp," %a[^<>,()]%n",&elem[i],&size) > 0) {
@@ -289,43 +255,54 @@ void **parse_pipe(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
 	if (outmaps)
 		numomaps = outmaps - events; 
 
-	/* for (cnt=0; cnt<i; cnt++) printf("%s: elem[%d]=%s\n", __func__, cnt, elem[cnt]); */
+	if (numevnts == 0) {
+		while (i--)
+			free(elem[i]);
+		return 0;
+	}
 
-	pipe = calloc(numpipe,sizeof(void *));
-	pipe[0] = vfi_find_func(dev,elem[func]);
-	/* printf("%s: pipe[0]=%p\n", __func__, pipe[0]); */
+	pipe = calloc(numpipe-numevnts,sizeof(void *));
+	vfi_find_func(dev,elem[func],&pipe[0]);
 	free(elem[func]);
 
 	for (i = 0; i< numimaps;i++) {
-		pipe[i+2] = vfi_find_map(dev,elem[i]);
-		/* printf("%s: pipe[i+2]=%p\n", __func__, (char *)pipe[i+2]); */
+		vfi_find_map(dev,elem[i],(struct vfi_map **)&pipe[i+2]);
 		free(elem[i]);
 	}
 
-	for (i = 0; i< numevnts;i++) {
-		evtcl = vfi_find_event(dev,elem[func+i+1]);
-		evtcl->pipe = pipe;
-		/* If we have more than 1 event then chain them together */
-		if ( (numevnts - i) > 1) {
-			do_chain (dev, ah, evtcl->name, evtcl->loc, elem[func+i+2]);
-		}
-		pipe[func+i+2] = evtcl->name;
-		/* printf("%s: pipe[func+i+2]=%s\n", __func__, (char *)pipe[func+i+2]); */
+	for (i = 0; i< numomaps;i++) {
+		vfi_find_map(dev,elem[events+i+1],(struct vfi_map **)&pipe[func+i+2]);
 		free(elem[func+i+1]);
 	}
 
-	for (i = 0; i< numomaps;i++) {
-		pipe[events+i+2] = vfi_find_map(dev,elem[events+i+1]);
-		/* printf("%s: pipe[events+i+2]=%p\n", __func__, (char *)pipe[events+i+2]); */
-		free(elem[events+i+1]);
-	}
-	pipe[1] = (void *)(((numimaps & 0xff) << 0) | ((numevnts & 0xff) << 8) | ((numomaps & 0xff) << 16));
-
+	pipe[1] = (void *)(((numimaps & 0xff) << 0) | ((numomaps & 0xff) << 8));
 	pipe[1] =  (void *)((unsigned int)pipe[1] ^ (unsigned int)pipe[0]);
 
-	/* printf("%s: numi(%d), nume(%d), numo(%d)\n", __func__, numimaps, numevnts, numomaps); */
+	if (numevnts > 1)
+		for (i = 0; i< numevnts-1;i++) {
+			vfi_find_event(dev,elem[func+i+1],(void **)&eloc);
+			vfi_invoke_cmd(dev,"event_chain://%s.%s?request(%p),event_name(%s)\n",
+				       elem[func+i+1],
+				       eloc,
+				       ah,
+				       elem[func+1+2]);
+			vfi_wait_async_handle(ah,&result,&e);
+			if (i)
+				free(elem[func+i+1]);
+		}
+	free(*cmd);
+	*cmd = malloc(128);
+	vfi_find_event(dev,elem[func+1],(void **)&eloc);
+	i = snprintf(*cmd,128,"event_start://%s.%s?request(%p)\n",elem[func+1],eloc,ah);
+	if (i >= 128) {
+		*cmd = realloc(*cmd,i+1);
+		snprintf(*cmd,128,"event_start://%s.%s\n",elem[func+1],eloc);
+	}
 
-	return pipe;
+	free(elem[func+1]);
+	free(vfi_set_async_handle(ah,pipe));
+
+	return 1;
 }
 
 void *source_thread(void *source)
@@ -336,14 +313,19 @@ void *source_thread(void *source)
 	struct vfi_async_handle *ah;
 	struct vfi_source *src = (struct vfi_source *)source;
 	ah = vfi_alloc_async_handle(NULL);
-	while (vfi_get_cmd(src,&cmd)) {
-		vfi_set_async_handle(ah,NULL);
-		if (!vfi_find_pre_cmd(src->d, ah, cmd)) {
-			vfi_invoke_cmd(src->d,"%s%srequest(%lx)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
-			vfi_wait_async_handle(ah,&result,(void *)&e);
-			vfi_invoke_closure(e);
+	while (vfi_get_cmd(src,&cmd) && !vfi_dev_done(src->d)) {
+		free(vfi_set_async_handle(ah,NULL));
+		if (!vfi_find_pre_cmd(src->d, ah, &cmd)) {
+			do {
+				vfi_invoke_cmd(src->d,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
+				vfi_wait_async_handle(ah,&result,(void *)&e);
+			} while (vfi_invoke_closure(e,src->d,ah,result) && !vfi_dev_done(src->d));
 		}
 	}
+
+	free(result);
+	free(e);
+
 	return 0;
 }
 
@@ -364,13 +346,12 @@ void *driver_thread(void *h)
 
 int initialize_api_commands(struct vfi_dev *dev)
 {
-	vfi_register_func(dev,"show",do_pipe);
+	vfi_register_func(dev,"show",show_function);
 
-	vfi_register_pre_cmd(dev,"event_start",parse_event_start_cmd);
-	vfi_register_pre_cmd(dev,"pipe",parse_pipe);
-	vfi_register_pre_cmd(dev,"bind_create",parse_bind_cmd);
-	vfi_register_pre_cmd(dev,"smb_create",parse_smb_create_cmd);
-	vfi_register_pre_cmd(dev,"smb_mmap",parse_smb_mmap_cmd);
+	vfi_register_pre_cmd(dev,"pipe",pipe_pre_cmd);
+	vfi_register_pre_cmd(dev,"bind_create",bind_create_pre_cmd);
+	vfi_register_pre_cmd(dev,"smb_create",smb_create_pre_cmd);
+	vfi_register_pre_cmd(dev,"smb_mmap",smb_mmap_pre_cmd);
 
 	return 0;
 }
