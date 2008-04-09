@@ -151,7 +151,7 @@ int event_find_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **
  * signature to determine its input/output parameters. In reality real
  * functions would at most simply check their signature as a debug
  * reality check before processing their fixed function. */
-void *show_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, char *result)
+int show_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, char *result)
 {
 	struct vfi_map **imaps;
 	struct vfi_map **omaps;
@@ -162,7 +162,7 @@ void *show_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, 
 	int sig = (unsigned int)e[1] ^ (unsigned int)show_function;
 	
 	if (sig & ~0xffff)
-		return NULL;
+		return 0;
 
 	imaps = (struct vfi_map **)&e[2];
 	numi = sig & 0xff;
@@ -180,7 +180,7 @@ void *show_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, 
 	for (i = 0; i < numo; i++)
 		printf("omap[%d](%s)%d\n",i,omaps[i]->name,omaps[i]->extent);
 
-	return e;
+	return 1;
 }
 
 /* The API pre-command to create and deliver a closure which executes
@@ -334,12 +334,10 @@ int process_commands(pthread_t *tid, struct vfi_source *src, struct gengetopt_ar
 	return pthread_create(tid,0,source_thread,(void *)src);
 }
 
-static int done = 0;
-
 void *driver_thread(void *h)
 {
 	struct vfi_dev *dev = (struct vfi_dev *)h;
-	while (!done)
+	while (!vfi_dev_done(dev))
 		vfi_post_async_handle(dev);
 	return 0;
 }
@@ -401,7 +399,8 @@ int main (int argc, char **argv)
 	if (ot) pthread_join(opts_tid,0);
 	if (ut) pthread_join(user_tid,0);
 
-	done = 1;
+	vfi_set_dev_done(dev);
+
 	pthread_join(driver_tid,NULL);
 	vfi_close(dev);
 
