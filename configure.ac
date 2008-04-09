@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([testprog], [0.1], [Phil Terry <pterry@vmetro.com>])
+AC_INIT([vfi_app], [0.1], [Phil Terry <pterry@vmetro.com>])
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([src/testprog.c])
 AC_CONFIG_HEADER([config.h])
@@ -12,8 +12,8 @@ AC_PROG_LIBTOOL
 AC_PROG_CC
 AC_CHECK_PROG([GGO],[gengetopt],[gengetopt])
 
-#PKG_CHECK_MODULES(RDDMA_API,librddma_api)
-MMC_PATH_RDDMA_API
+PKG_CHECK_MODULES(VFI_API,libvfi_api)
+#VFI_PATH_VFI_API
 
 # Checks for libraries.
 AC_CHECK_LIB([pthread],[sem_init])

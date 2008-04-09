@@ -1,6 +1,6 @@
-INCLUDES = $(RDDMA_API_CFLAGS)
+INCLUDES = $(VFI_API_CFLAGS)
 
-LIBS = $(RDDMA_API_LIBS) -lpthread
+LIBS = $(VFI_API_LIBS) -lpthread
 
 bin_PROGRAMS = testprog testprog_async frmwrk local_dma_test master_sync local_dma_chain_test
 
@@ -10,4 +10,3 @@ frmwrk_SOURCES = frmwrk.c fw_cmdline.c fw_cmdline.h
 %.h %.c:%.ggo
 	$(GGO) --file-name=$* < $< 
 
-EXTRA_DIST = testprog.ggo

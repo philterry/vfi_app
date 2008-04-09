@@ -1,4 +1,4 @@
-#include <rddma_api.h>
+#include <vfi_api.h>
 #include <semaphore.h>
 #include <pthread.h>
 #include <tp_cmdline.h>
@@ -46,7 +46,7 @@ void *do_pipe(void **e, char *result)
 }
 
 /* A sample internal command to create and deliver a closure... */
-void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
+void **parse_pipe(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
 {
 /* pipe://[<inmap><]*<func>[(<event>[,<event]*)][><omap>]*  */
 
@@ -113,21 +113,21 @@ void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cm
 		numomaps = outmaps - events; 
 
 	pipe = calloc(numpipe,sizeof(void *));
-	pipe[0] = rddma_find_func(dev,elem[func]);
+	pipe[0] = vfi_find_func(dev,elem[func]);
 	free(elem[func]);
 
 	for (i = 0; i< numimaps;i++) {
-		pipe[i+2] = rddma_find_map(dev,elem[i]);
+		pipe[i+2] = vfi_find_map(dev,elem[i]);
 		free(elem[i]);
 	}
 
 	for (i = 0; i< numevnts;i++) {
-		pipe[func+i+2] = rddma_find_event(dev,elem[func+i+1]);
+		pipe[func+i+2] = vfi_find_event(dev,elem[func+i+1]);
 		free(elem[func+i+1]);
 	}
 
 	for (i = 0; i< numomaps;i++) {
-		pipe[events+i+2] = rddma_find_map(dev,elem[events+i+1]);
+		pipe[events+i+2] = vfi_find_map(dev,elem[events+i+1]);
 		free(elem[events+i+1]);
 	}
 	pipe[1] = (void *)(((numimaps & 0xff) << 0) | ((numevnts & 0xff) << 8) | ((numomaps & 0xff) << 16));
@@ -137,7 +137,7 @@ void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cm
 }
 
 /* An example of application processing style, in this case Blocking Ordered */
-int test_BO(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_args_info *opts)
+int test_BO(struct vfi_dev *dev, struct vfi_source *src, struct gengetopt_args_info *opts)
 {
 	char *output;
 	char *cmd = NULL;
@@ -146,10 +146,10 @@ int test_BO(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_ar
 	void *done;
 
 	printf("Blocking Ordered Mode\n");
-	while (rddma_get_cmd(src,&cmd) && result) {
+	while (vfi_get_cmd(src,&cmd) && result) {
 
 		/* Crap to debug closures... */
- 		e = rddma_find_pre_cmd(dev,NULL,cmd);
+ 		e = vfi_find_pre_cmd(dev,NULL,cmd);
  		if (e)
  			done = ((void *(*)(void **,char *))(e[0]))(e,output);
 		
@@ -157,12 +157,12 @@ int test_BO(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_ar
 
 		printf ("%s\n\t -> ",cmd);
 
-		result = rddma_do_cmd(dev,&output, "%s\n", cmd);
+		result = vfi_do_cmd(dev,&output, "%s\n", cmd);
 
 		if (result < 0)
 			break;
 
-		result = rddma_get_dec_arg(output,"result");
+		result = vfi_get_dec_arg(output,"result");
 
 		printf("%s\n",output);;
 
@@ -175,7 +175,7 @@ int test_BO(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_ar
 /* Another example of application processing style, overlapped driver
  * command with processing but block at end of processing before next
  * driver invocation, ie Blocked Interleaved Ordered. */
-int test_NBIO(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_args_info *opts)
+int test_NBIO(struct vfi_dev *dev, struct vfi_source *src, struct gengetopt_args_info *opts)
 {
 	char *cmd = NULL;
 	char *output;
@@ -183,18 +183,18 @@ int test_NBIO(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_
 
 	printf("Non-Blocking Interleaved Ordered Mode\n");
 
-	while (rddma_get_cmd(src,&cmd) && result) {
+	while (vfi_get_cmd(src,&cmd) && result) {
 		printf ("%s\n\t -> ",cmd);
 
-		result = rddma_invoke_cmd(dev, "%s\n", cmd);
+		result = vfi_invoke_cmd(dev, "%s\n", cmd);
 		if (result < 0)
 			break;
 
-		result = rddma_get_result(dev,&output);
+		result = vfi_get_result(dev,&output);
 		if (result < 0)
 			break;
 
-		result = rddma_get_dec_arg(output,"result");
+		result = vfi_get_dec_arg(output,"result");
 
 		printf("%s\n",output);
 
@@ -213,20 +213,20 @@ void *thr_f(void *h)
 	int done = 0;
 
 	while (!done) {
-		rddma_wait_async_handle(h,&output,(void **)&e);
+		vfi_wait_async_handle(h,&output,(void **)&e);
 		if (e)
 			done = ((int (*)(void **,char *))(e[0]))(e,output);
 		else
 			done = 1;
 	}
 
-	result = rddma_get_dec_arg(output,"result");
+	result = vfi_get_dec_arg(output,"result");
 
 	printf("\t -> %s\n",output);
 	fflush(stdout);
 
 	free(output); 
-	rddma_free_async_handle(h);
+	vfi_free_async_handle(h);
 	pthread_exit(0);
 }
 
@@ -234,15 +234,15 @@ void *thr_f(void *h)
  * spawning dependent threads above... */
 void *thr_l(void *h)
 {
-	struct rddma_dev *dev = (struct rddma_dev *)h;
+	struct vfi_dev *dev = (struct vfi_dev *)h;
 	while (1)
-		rddma_post_async_handle(dev);
+		vfi_post_async_handle(dev);
 }
 
 /* Another example of application processing style, completely out of
  * order overlapped processing with driver invocations using
  * applicaton threads. */
-int test_NBOO(struct rddma_dev *dev,struct rddma_source *src, struct gengetopt_args_info *opts)
+int test_NBOO(struct vfi_dev *dev,struct vfi_source *src, struct gengetopt_args_info *opts)
 {
 	int i = 0;
 	int count = 0;
@@ -258,12 +258,12 @@ int test_NBOO(struct rddma_dev *dev,struct rddma_source *src, struct gengetopt_a
 
 	pthread_create(&clean,0,thr_l,(void *)dev);
 
-	while ( rddma_get_cmd(src,&cmd)) {
+	while ( vfi_get_cmd(src,&cmd)) {
 		printf ("%s\n",cmd);
-		ah = rddma_alloc_async_handle(NULL);
-		e = rddma_find_pre_cmd(dev,ah,cmd);
-		rddma_set_async_handle(ah,e);
-		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", cmd,ah);
+		ah = vfi_alloc_async_handle(NULL);
+		e = vfi_find_pre_cmd(dev,ah,cmd);
+		vfi_set_async_handle(ah,e);
+		result = vfi_invoke_cmd(dev, "%s?request(%p)\n", cmd,ah);
 		pthread_create(&tid[count++],0,thr_f,(void *)ah);
 	}
 
@@ -276,7 +276,7 @@ int test_NBOO(struct rddma_dev *dev,struct rddma_source *src, struct gengetopt_a
 /* Another application processing style example, same as NBOO but
  * implemented with true AIO rather than read/write/poll but using
  * poll on eventfd files to detect AIO events, rather than POSIX signals. */
-int test_AIOE(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_args_info *opts)
+int test_AIOE(struct vfi_dev *dev, struct vfi_source *src, struct gengetopt_args_info *opts)
 {
 	int i;
 	int count = 0;
@@ -291,12 +291,12 @@ int test_AIOE(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_
 
 	pthread_create(&clean,0,thr_l,(void *)dev);
 
-	while (rddma_get_cmd(src,&cmd)) {
+	while (vfi_get_cmd(src,&cmd)) {
 		printf ("%s\n",cmd);
-		ah = rddma_alloc_async_handle(NULL);
-		e = rddma_find_pre_cmd(dev,ah,cmd);
-		rddma_set_async_handle(ah,e);
-		result = rddma_invoke_cmd(dev, "%s?request(%p)\n", cmd, ah);
+		ah = vfi_alloc_async_handle(NULL);
+		e = vfi_find_pre_cmd(dev,ah,cmd);
+		vfi_set_async_handle(ah,e);
+		result = vfi_invoke_cmd(dev, "%s?request(%p)\n", cmd, ah);
 		pthread_create(&tid[count++],0,thr_f,(void *)ah);
 	}
 
@@ -308,7 +308,7 @@ int test_AIOE(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_
 
 /* Wrapper to process the input source in one of the applciation
  * example styles... */
-int process_commands(struct rddma_dev *dev, struct rddma_source *src, struct gengetopt_args_info *opts)
+int process_commands(struct vfi_dev *dev, struct vfi_source *src, struct gengetopt_args_info *opts)
 {
 	int result;
 	switch(opts->mode_arg) {
@@ -335,9 +335,9 @@ int get_inputs(void **s, char **command)
 	return opts->inputs_num--;
 }
 
-int setup_inputs(struct rddma_dev *dev, struct rddma_source **src,struct gengetopt_args_info *opts)
+int setup_inputs(struct vfi_dev *dev, struct vfi_source **src,struct gengetopt_args_info *opts)
 {
-	struct rddma_source *h = malloc(sizeof(*h)+sizeof(void *));
+	struct vfi_source *h = malloc(sizeof(*h)+sizeof(void *));
 	*src = h;
 	if (h == NULL)
 		return -ENOMEM;
@@ -350,33 +350,33 @@ int setup_inputs(struct rddma_dev *dev, struct rddma_source **src,struct gengeto
 int main (int argc, char **argv)
 {
 	struct gengetopt_args_info opts;
-	struct rddma_source *s;
-	struct rddma_dev *dev;
+	struct vfi_source *s;
+	struct vfi_dev *dev;
 
-	rddma_open(&dev,NULL,opts.timeout_arg);
+	vfi_open(&dev,NULL,opts.timeout_arg);
 
-	char *im1 = rddma_register_map(dev,"im1",calloc(1,128));
-	char *im2 = rddma_register_map(dev,"im2",calloc(1,128));
-	char *om1 = rddma_register_map(dev,"om1",calloc(1,128));
-	char *om2 = rddma_register_map(dev,"om2",calloc(1,128));
+	char *im1 = vfi_register_map(dev,"im1",calloc(1,128));
+	char *im2 = vfi_register_map(dev,"im2",calloc(1,128));
+	char *om1 = vfi_register_map(dev,"om1",calloc(1,128));
+	char *om2 = vfi_register_map(dev,"om2",calloc(1,128));
 
 	strcpy(im1,"hello this is in map string one");
 	strcpy(im2,"hello this is in map string two");
 	strcpy(om1,"hello this is out map string one");
 	strcpy(om2,"hello this is out map string two");
 
-	rddma_register_func(dev,"show",do_pipe);
-	rddma_register_event(dev,"e1",(void *)1);
-	rddma_register_event(dev,"e2",(void *)2);
+	vfi_register_func(dev,"show",do_pipe);
+	vfi_register_event(dev,"e1",(void *)1);
+	vfi_register_event(dev,"e2",(void *)2);
 
-	rddma_register_pre_cmd(dev,"pipe",parse_pipe);
+	vfi_register_pre_cmd(dev,"pipe",parse_pipe);
 
 	cmdline_parser_init(&opts);
 
 	cmdline_parser(argc,argv,&opts);
 
 	if (opts.file_given) {
-		rddma_setup_file(dev,&s,fopen(opts.file_arg,"r"));
+		vfi_setup_file(dev,&s,fopen(opts.file_arg,"r"));
 		process_commands(dev,s,&opts);
 	}
 
@@ -386,11 +386,11 @@ int main (int argc, char **argv)
 	}
 
 	if (opts.interactive_given) {
-		rddma_setup_file(dev,&s,stdin);
+		vfi_setup_file(dev,&s,stdin);
 		process_commands(dev,s,&opts);
 	}
 
-	rddma_close(dev);
+	vfi_close(dev);
 
 	return 0;
 }

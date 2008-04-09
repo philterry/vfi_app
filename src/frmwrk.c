@@ -1,4 +1,4 @@
-#include <rddma_api.h>
+#include <vfi_api.h>
 #include <semaphore.h>
 #include <pthread.h>
 #include <fw_cmdline.h>
@@ -18,9 +18,9 @@ int get_inputs(void **s, char **command)
 	return opts->inputs_num--;
 }
 
-int setup_inputs(struct rddma_dev *dev, struct rddma_source **src, struct gengetopt_args_info *opts)
+int setup_inputs(struct vfi_dev *dev, struct vfi_source **src, struct gengetopt_args_info *opts)
 {
-	struct rddma_source *h = malloc(sizeof(*h)+sizeof(void *));
+	struct vfi_source *h = malloc(sizeof(*h)+sizeof(void *));
 	*src = h;
 	if (src == NULL)
 		return -ENOMEM;
@@ -41,7 +41,7 @@ static char *parse_location(char *str)
 	return loc;
 }
 
-void **parse_bind_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
+void **parse_bind_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
 {
 	/* bind_create://x.xl.f/d.dl.f?event_name(dn)=s.sl.f?event_name(sn) */
 
@@ -54,8 +54,8 @@ void **parse_bind_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char
 	sscanf(cmd+size,"%a[^=]%n",&dl,&size);
 	sl = sl + size;
 	
-	rddma_get_str_arg(sl,"event_name",&sen);
-	rddma_get_str_arg(dl,"event_name",&den);
+	vfi_get_str_arg(sl,"event_name",&sen);
+	vfi_get_str_arg(dl,"event_name",&den);
 
 	sl = parse_location(sl);
 	dl = parse_location(dl);
@@ -68,8 +68,8 @@ void **parse_bind_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char
 	devtcl->name = den;
 	devtcl->loc = dl;
 
-	rddma_register_event(dev,sen,sevtcl);
-	rddma_register_event(dev,den,devtcl);
+	vfi_register_event(dev,sen,sevtcl);
+	vfi_register_event(dev,den,devtcl);
 	printf("%s:sen(%s),sl(%s),den(%s),dl(%s),xl(%s)\n",__FUNCTION__,sen,sl,den,dl,xl);
 	free(xl);
 	return 0;
@@ -87,40 +87,40 @@ int get_extent(char *str)
 	return extent;
 }
 
-void **parse_smb_mmap_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
+void **parse_smb_mmap_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
 {
 	/* smb_mmap://smb.loc.f#off:ext?map_name(name),mmap_offset(mapid) */
-	char *name;
-	char *result;
+	char *name = NULL;
+	char *result = NULL;
 	void **e;
 	long offset;
 	void *mem;
 	int prot = PROT_READ | PROT_WRITE;
 	int flags = MAP_SHARED;
 
-	if (rddma_get_str_arg(cmd,"map_name",&name) > 0) {
-		rddma_invoke_cmd(dev,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
-		rddma_wait_async_handle(ah,&result,(void *)&e);
-		offset = rddma_get_hex_arg(result,"mmap_offset");
-		mem = mmap(0, get_extent(cmd), prot, flags, rddma_fileno(dev), offset);
-		rddma_register_map(dev,name,mem);
+	if (vfi_get_str_arg(cmd,"map_name",&name) > 0) {
+		vfi_invoke_cmd(dev,"%s%srequest(%lx)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
+		vfi_wait_async_handle(ah,&result,(void *)&e);
+		offset = vfi_get_hex_arg(result,"mmap_offset");
+		mem = mmap(0, get_extent(cmd), prot, flags, vfi_fileno(dev), offset);
+		vfi_register_map(dev,name,mem);
 		free(result);
 		return mem;
 	}
 	return 0;
 }
 
-void **parse_smb_create_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
+void **parse_smb_create_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
 {
 	/* smb_create://smb.loc.f#off:ext?map_name(name) */
-	char *name;
-	char *result;
+	char *name = NULL;
+	char *result = NULL;
 	void **e;
 
-	if (rddma_get_str_arg(cmd,"map_name",&name) > 0) {
+	if (vfi_get_str_arg(cmd,"map_name",&name) > 0) {
 		char *new_cmd;
-		rddma_invoke_cmd(dev,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
-		rddma_wait_async_handle(ah,&result,(void *)&e);
+		vfi_invoke_cmd(dev,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
+		vfi_wait_async_handle(ah,&result,(void *)&e);
 		memcpy(result,"  smb_mmap",10);
 		new_cmd = malloc(strlen(result)+12+strlen(name));
 		sprintf(new_cmd,"%s,map_name(%s)",result+2,name);
@@ -133,7 +133,7 @@ void **parse_smb_create_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah
 	return 0;
 }
 
-void **parse_event_start_cmd(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
+void **parse_event_start_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
 {
 	/* even_start://name.loc */
 
@@ -144,8 +144,13 @@ void **parse_event_start_cmd(struct rddma_dev *dev, struct rddma_async_handle *a
 	name += 3;
 	sscanf(name,   "%a[^.]",&name);
 
-	evtcl = rddma_find_event(dev,name);
-	rddma_set_async_handle(ah,evtcl->pipe);
+	/* 
+	 * The event will only be found on the node you did the bind.
+	 * An event may or may not have a closure.
+	 */
+	evtcl = vfi_find_event(dev,name);
+	if (evtcl && evtcl->pipe)
+		vfi_set_async_handle(ah,evtcl->pipe);
 
 	free(name);
 	return 0;
@@ -191,24 +196,25 @@ void *do_pipe(void **e, char *result)
 }
 
 
-static int do_chain(struct rddma_dev *dev, struct rddma_async_handle *ah, char *name, char *loc, char *next_name)
+static int do_chain(struct vfi_dev *dev, struct vfi_async_handle *ah, char *name, char *loc, char *next_name)
 {
 	/* event_chain://name.loc?event_name(next_name) */
 
-	char *result;
+	char *result = NULL;
 	void **e;
 
-	rddma_set_async_handle(ah,NULL);
-	rddma_invoke_cmd(dev,"event_chain://%s.%s?event_name(%s),request(%p)\n",
+	vfi_set_async_handle(ah,NULL);
+	vfi_invoke_cmd(dev,"event_chain://%s.%s?event_name(%s),request(%lx)\n",
 			 name,loc,next_name,ah);
-	rddma_wait_async_handle(ah,&result,(void *)&e);
+	vfi_wait_async_handle(ah,&result,(void *)&e);
+	free (result);
 	
 	return 0;
 }
 
 
 /* A sample internal command to create and deliver a closure... */
-void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cmd)
+void **parse_pipe(struct vfi_dev *dev, struct vfi_async_handle *ah, char *cmd)
 {
 /* pipe://[<inmap><]*<func>[(<event>[,<event]*)][><omap>]*  */
 
@@ -286,18 +292,18 @@ void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cm
 	/* for (cnt=0; cnt<i; cnt++) printf("%s: elem[%d]=%s\n", __func__, cnt, elem[cnt]); */
 
 	pipe = calloc(numpipe,sizeof(void *));
-	pipe[0] = rddma_find_func(dev,elem[func]);
+	pipe[0] = vfi_find_func(dev,elem[func]);
 	/* printf("%s: pipe[0]=%p\n", __func__, pipe[0]); */
 	free(elem[func]);
 
 	for (i = 0; i< numimaps;i++) {
-		pipe[i+2] = rddma_find_map(dev,elem[i]);
+		pipe[i+2] = vfi_find_map(dev,elem[i]);
 		/* printf("%s: pipe[i+2]=%p\n", __func__, (char *)pipe[i+2]); */
 		free(elem[i]);
 	}
 
 	for (i = 0; i< numevnts;i++) {
-		evtcl = rddma_find_event(dev,elem[func+i+1]);
+		evtcl = vfi_find_event(dev,elem[func+i+1]);
 		evtcl->pipe = pipe;
 		/* If we have more than 1 event then chain them together */
 		if ( (numevnts - i) > 1) {
@@ -309,7 +315,7 @@ void **parse_pipe(struct rddma_dev *dev, struct rddma_async_handle *ah, char *cm
 	}
 
 	for (i = 0; i< numomaps;i++) {
-		pipe[events+i+2] = rddma_find_map(dev,elem[events+i+1]);
+		pipe[events+i+2] = vfi_find_map(dev,elem[events+i+1]);
 		/* printf("%s: pipe[events+i+2]=%p\n", __func__, (char *)pipe[events+i+2]); */
 		free(elem[events+i+1]);
 	}
@@ -327,22 +333,21 @@ void *source_thread(void *source)
 	char *cmd = NULL;
 	char *result = NULL;
 	void **e;
-	struct rddma_async_handle *ah;
-	struct rddma_source *src = (struct rddma_source *)source;
-	ah = rddma_alloc_async_handle(NULL);
-	while (rddma_get_cmd(src,&cmd)) {
-		/* printf("%s: cmd = %s\n", __func__, cmd); */
-		rddma_set_async_handle(ah,NULL);
-		if (!rddma_find_pre_cmd(src->d, ah, cmd)) {
-			rddma_invoke_cmd(src->d,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
-			rddma_wait_async_handle(ah,&result,(void *)&e);
-			rddma_invoke_closure(e);
+	struct vfi_async_handle *ah;
+	struct vfi_source *src = (struct vfi_source *)source;
+	ah = vfi_alloc_async_handle(NULL);
+	while (vfi_get_cmd(src,&cmd)) {
+		vfi_set_async_handle(ah,NULL);
+		if (!vfi_find_pre_cmd(src->d, ah, cmd)) {
+			vfi_invoke_cmd(src->d,"%s%srequest(%lx)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
+			vfi_wait_async_handle(ah,&result,(void *)&e);
+			vfi_invoke_closure(e);
 		}
 	}
 	return 0;
 }
 
-int process_commands(pthread_t *tid, struct rddma_source *src, struct gengetopt_args_info *opts)
+int process_commands(pthread_t *tid, struct vfi_source *src, struct gengetopt_args_info *opts)
 {
 	return pthread_create(tid,0,source_thread,(void *)src);
 }
@@ -351,21 +356,21 @@ static int done = 0;
 
 void *driver_thread(void *h)
 {
-	struct rddma_dev *dev = (struct rddma_dev *)h;
+	struct vfi_dev *dev = (struct vfi_dev *)h;
 	while (!done)
-		rddma_post_async_handle(dev);
+		vfi_post_async_handle(dev);
 	return 0;
 }
 
-int initialize_api_commands(struct rddma_dev *dev)
+int initialize_api_commands(struct vfi_dev *dev)
 {
-	rddma_register_func(dev,"show",do_pipe);
+	vfi_register_func(dev,"show",do_pipe);
 
-	rddma_register_pre_cmd(dev,"event_start",parse_event_start_cmd);
-	rddma_register_pre_cmd(dev,"pipe",parse_pipe);
-	rddma_register_pre_cmd(dev,"bind_create",parse_bind_cmd);
-	rddma_register_pre_cmd(dev,"smb_create",parse_smb_create_cmd);
-	rddma_register_pre_cmd(dev,"smb_mmap",parse_smb_mmap_cmd);
+	vfi_register_pre_cmd(dev,"event_start",parse_event_start_cmd);
+	vfi_register_pre_cmd(dev,"pipe",parse_pipe);
+	vfi_register_pre_cmd(dev,"bind_create",parse_bind_cmd);
+	vfi_register_pre_cmd(dev,"smb_create",parse_smb_create_cmd);
+	vfi_register_pre_cmd(dev,"smb_mmap",parse_smb_mmap_cmd);
 
 	return 0;
 }
@@ -373,8 +378,8 @@ int initialize_api_commands(struct rddma_dev *dev)
 int main (int argc, char **argv)
 {
 	struct gengetopt_args_info opts;
-	struct rddma_dev *dev;
-	struct rddma_source *src;
+	struct vfi_dev *dev;
+	struct vfi_source *src;
 
 	pthread_t driver_tid;
 
@@ -389,7 +394,7 @@ int main (int argc, char **argv)
 	cmdline_parser_init(&opts);
 	cmdline_parser(argc,argv,&opts);
 
-	rddma_open(&dev,opts.device_arg,opts.timeout_arg);
+	vfi_open(&dev,opts.device_arg,opts.timeout_arg);
 	
 	initialize_api_commands(dev);
 
@@ -397,7 +402,7 @@ int main (int argc, char **argv)
 
 	while (opts.file_given--) {
 		FILE *file = fopen(*opts.file_arg++,"r");
-		if (!rddma_setup_file(dev,&src,file))
+		if (!vfi_setup_file(dev,&src,file))
 			ft = process_commands(&file_tid, src, &opts) == 0;
 	}
 
@@ -407,7 +412,7 @@ int main (int argc, char **argv)
 	}
 
 	if (opts.interactive_given) {
-		if (!rddma_setup_file(dev,&src,stdin))
+		if (!vfi_setup_file(dev,&src,stdin))
 			ut = process_commands(&user_tid, src, &opts) == 0;
 	}
 
@@ -417,7 +422,7 @@ int main (int argc, char **argv)
 
 	done = 1;
 	pthread_join(driver_tid,NULL);
-	rddma_close(dev);
+	vfi_close(dev);
 
 	return 0;
 }

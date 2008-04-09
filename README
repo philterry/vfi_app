@@ -15,8 +15,8 @@ int main (int argc, char **argv)
 	int fd;
 	char c;
 
-	printf("Opening /dev/rddma...");
-	fd = open("/dev/rddma",O_RDWR);
+	printf("Opening /dev/vfi...");
+	fd = open("/dev/vfi",O_RDWR);
 	if ( fd < 0 ) {
 		perror("failed");
 		return (0);
@@ -24,7 +24,7 @@ int main (int argc, char **argv)
 	else
 		printf("OK\n");
 
-/* 	rddma_smb_create("fred"); */
+/* 	vfi_smb_create("fred"); */
 
 	scanf("%c", &c);
 	close(fd);
@@ -61,7 +61,7 @@ Edit this as follows and save it as configure.ac
  
  AC_PREREQ(2.59)
 -AC_INIT(FULL-PACKAGE-NAME, VERSION, BUG-REPORT-ADDRESS)
-+AC_INIT([rddma_userland], [0.1], [Phil Terry <pterry@micromemory.com>])
++AC_INIT([vfi_userland], [0.1], [Phil Terry <pterry@micromemory.com>])
 +AM_INIT_AUTOMAKE
  AC_CONFIG_SRCDIR([src/testprog.c])
  AC_CONFIG_HEADER([config.h])
