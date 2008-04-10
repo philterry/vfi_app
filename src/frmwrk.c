@@ -145,6 +145,21 @@ int event_find_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **
 	return 0;
 }
 
+int sync_find_closure(void *e, struct vfi_dev *dev, struct vfi_async_handle *ah, char **result)
+{
+	return (vfi_get_dec_arg(*result,"result") != 0);
+}
+
+int sync_find_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
+{
+	/* sync_find://name.location?wait */
+	if (vfi_get_option(*cmd,"wait"))
+		free(vfi_set_async_handle(ah,sync_find_closure));
+
+	return 0;
+}
+
+
 /* A sample internal function of the sort which can be invoked by the
  * pipe API pre-command in conjunction with the source processing loop
  * thread. This function is polymorphic in that it parses its
