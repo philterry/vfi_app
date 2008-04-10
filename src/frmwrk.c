@@ -198,6 +198,45 @@ int show_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, ch
 	return 1;
 }
 
+int copy_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, char *result)
+{
+	struct vfi_map **imaps;
+	struct vfi_map **omaps;
+	int numi;
+	int numo;
+	int in = 0,out = 0;
+	int done = 0;
+	int size;
+
+	int sig = (unsigned int)e[1] ^ (unsigned int)show_function;
+	
+	if (sig & ~0xffff)
+		return 0;
+
+	imaps = (struct vfi_map **)&e[2];
+	numi = sig & 0xff;
+
+	sig >>= 8;
+
+	omaps = (struct vfi_map **)&e[2+numi];
+	numo = sig & 0xff;
+
+	while (!done) {
+		size = (omaps[out]->extent < imaps[in]->extent) ? omaps[out]->extent : imaps[in]->extent;
+		memcpy(omaps[out]->mem,imaps[in]->mem,size);
+
+		if (out + 1 == numo && in + 1 == numi)
+			done = 1;
+
+		if (out + 1 < numo)
+			out++;
+
+		if (in + 1 < numi)
+			in++;
+	}
+	return 1;
+}
+
 /* The API pre-command to create and deliver a closure which executes
  * the named function on the named maps, invokes the chained events,
  * and is reinvoked on completion of the chained events. */
@@ -360,12 +399,14 @@ void *driver_thread(void *h)
 int initialize_api_commands(struct vfi_dev *dev)
 {
 	vfi_register_func(dev,"show",show_function);
+	vfi_register_func(dev,"copy",copy_function);
 
 	vfi_register_pre_cmd(dev,"pipe",pipe_pre_cmd);
 	vfi_register_pre_cmd(dev,"bind_create",bind_create_pre_cmd);
 	vfi_register_pre_cmd(dev,"smb_create",smb_create_pre_cmd);
 	vfi_register_pre_cmd(dev,"smb_mmap",smb_mmap_pre_cmd);
 	vfi_register_pre_cmd(dev,"sync_find",sync_find_pre_cmd);
+	vfi_register_pre_cmd(dev,"event_find",event_find_pre_cmd);
 
 	return 0;
 }
