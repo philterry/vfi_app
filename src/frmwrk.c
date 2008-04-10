@@ -365,6 +365,7 @@ int initialize_api_commands(struct vfi_dev *dev)
 	vfi_register_pre_cmd(dev,"bind_create",bind_create_pre_cmd);
 	vfi_register_pre_cmd(dev,"smb_create",smb_create_pre_cmd);
 	vfi_register_pre_cmd(dev,"smb_mmap",smb_mmap_pre_cmd);
+	vfi_register_pre_cmd(dev,"sync_find",sync_find_pre_cmd);
 
 	return 0;
 }
