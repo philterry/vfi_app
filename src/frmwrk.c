@@ -46,8 +46,6 @@ int bind_create_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char *
 	vfi_register_event(dev,sen,sl);
 	vfi_register_event(dev,den,dl);
 
-	printf("%s:sen(%s),sl(%s),den(%s),dl(%s),xl(%s)\n",__FUNCTION__,sen,sl,den,dl,xl);
-
 	free(xl);free(sl);free(dl);free(dst);free(sen);free(den);
 
 	return 0;
@@ -359,6 +357,12 @@ int pipe_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
 	return 1;
 }
 
+int quit_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
+{
+	vfi_set_dev_done(dev);
+	return 0;
+}
+
 void *source_thread(void *source)
 {
 	char *cmd = NULL;
@@ -373,6 +377,7 @@ void *source_thread(void *source)
 			do {
 				vfi_invoke_cmd(src->d,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
 				vfi_wait_async_handle(ah,&result,(void *)&e);
+				printf("%s\n",result);
 			} while (vfi_invoke_closure(e,src->d,ah,result) && !vfi_dev_done(src->d));
 		}
 	}
@@ -407,6 +412,7 @@ int initialize_api_commands(struct vfi_dev *dev)
 	vfi_register_pre_cmd(dev,"smb_mmap",smb_mmap_pre_cmd);
 	vfi_register_pre_cmd(dev,"sync_find",sync_find_pre_cmd);
 	vfi_register_pre_cmd(dev,"event_find",event_find_pre_cmd);
+	vfi_register_pre_cmd(dev,"quit",quit_pre_cmd);
 
 	return 0;
 }
@@ -427,10 +433,14 @@ int main (int argc, char **argv)
 	int ot = 0;
 	int ut = 0;
 
+	int rc;
+
 	cmdline_parser_init(&opts);
 	cmdline_parser(argc,argv,&opts);
 
-	vfi_open(&dev,opts.device_arg,opts.timeout_arg);
+	rc = vfi_open(&dev,opts.device_arg,opts.timeout_arg);
+	if (rc)
+		return rc;
 	
 	initialize_api_commands(dev);
 
