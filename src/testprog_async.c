@@ -63,7 +63,8 @@ int main (int argc, char **argv)
 		 * where <x> is the offset, in hex, that we need to use
 		 * with actual mmap calls to map the target area.
 		 */
-		unsigned long t_id = vfi_get_hex_arg (output,"mmap_offset");
+		unsigned long t_id = 0;
+		vfi_get_hex_arg (output,"mmap_offset",&t_id);
 		if (t_id) {
 			void* mapping;
 			printf ("mmap... %08lx\n", t_id);

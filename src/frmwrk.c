@@ -59,7 +59,7 @@ int smb_mmap_closure(void *e, struct vfi_dev *dev, struct vfi_async_handle *ah, 
 	int flags = MAP_SHARED;
 
 	struct vfi_map *p = e;
-	if ((offset = vfi_get_hex_arg(result,"mmap_offset"))) {
+	if (!vfi_get_hex_arg(result,"mmap_offset",&offset)) {
 		p->mem = mmap(0,p->extent,prot,flags,vfi_fileno(dev), offset);
 		vfi_register_map(dev,p->name,e);
 		vfi_set_async_handle(ah,NULL);
@@ -123,12 +123,13 @@ int event_find_closure(void *e, struct vfi_dev *dev, struct vfi_async_handle *ah
 	/* event_find://name.location */
 	char *name;
 	char *location;
-	int err;
+	long err;
+	int rc;
 
-	err = vfi_get_dec_arg(*result,"result");
-	if (!err) {
-		err = vfi_get_name_location(*result,&name,&location);
-		if (!err) {
+	rc = vfi_get_dec_arg(*result,"result",&err);
+	if (!err && !rc) {
+		rc = vfi_get_name_location(*result,&name,&location);
+		if (!rc) {
 			vfi_register_event(dev,name,location);
 			free(name);free(location);
 		}
@@ -145,7 +146,13 @@ int event_find_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **
 
 int sync_find_closure(void *e, struct vfi_dev *dev, struct vfi_async_handle *ah, char **result)
 {
-	return (vfi_get_dec_arg(*result,"result") != 0);
+	long rslt;
+	int rc;
+	rc = vfi_get_dec_arg(*result,"result",&rslt);
+	if (rc)
+		return 0;
+
+	return rslt;
 }
 
 int sync_find_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
@@ -359,7 +366,49 @@ int pipe_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
 
 int quit_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
 {
+	/* quit or quit:// */
 	vfi_set_dev_done(dev);
+	return 0;
+}
+
+int map_init_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
+{
+	/* map_init://name#o:e?init_val(x) */
+	char *name;
+	char *location;
+	long long offset;
+	long extent;
+	long val;
+	struct vfi_map *map;
+	long *mem;
+	int rc;
+
+	rc = vfi_get_name_location(*cmd, &name, &location);
+	free(location);
+	if (rc)
+		goto out;
+	if (vfi_get_offset(*cmd,&offset))
+		goto out;
+	if (vfi_get_extent(*cmd,&extent))
+		goto out;
+	if (vfi_get_hex_arg(*cmd,"init_val",&val))
+		goto out;
+	if (vfi_find_map(dev,name,&map))
+		goto out;
+	if (map->extent < offset + extent)
+		goto out;
+
+	free(name);
+
+	mem = (long *)map->mem + offset;
+	extent = extent >> 2;
+
+	while  (extent--)
+		*mem++ = val;
+
+	return 1;
+out:
+	free(name);
 	return 0;
 }
 

@@ -13,29 +13,27 @@ int test_BO(struct vfi_dev *dev, struct vfi_source *src, struct gengetopt_args_i
 {
 	char *output;
 	char *cmd = NULL;
-	int result = 1;
-	void **e;
-	void *done;
-
+	int rc = 0;
+	long result;
 	printf("Blocking Ordered Mode\n");
-	while (vfi_get_cmd(src,&cmd) && result) {
+	while (vfi_get_cmd(src,&cmd) && !rc) {
 
 
 		printf ("%s\n\t -> ",cmd);
 
-		result = vfi_do_cmd(dev,&output, "%s\n", cmd);
+		rc = vfi_do_cmd(dev,&output, "%s\n", cmd);
 
-		if (result < 0)
+		if (rc < 0)
 			break;
 
-		result = vfi_get_dec_arg(output,"result");
+		rc = vfi_get_dec_arg(output,"result", &result);
 
 		printf("%s\n",output);;
 
 		free(output); 
 	}
 
-	return result;
+	return rc;
 }
 
 /* Another example of application processing style, overlapped driver
@@ -45,29 +43,30 @@ int test_NBIO(struct vfi_dev *dev, struct vfi_source *src, struct gengetopt_args
 {
 	char *cmd = NULL;
 	char *output;
-	int result = 1;
+	long result;
+	int rc = 0;
 
 	printf("Non-Blocking Interleaved Ordered Mode\n");
 
-	while (vfi_get_cmd(src,&cmd) && result) {
+	while (vfi_get_cmd(src,&cmd) && !rc) {
 		printf ("%s\n\t -> ",cmd);
 
-		result = vfi_invoke_cmd(dev, "%s\n", cmd);
-		if (result < 0)
+		rc = vfi_invoke_cmd(dev, "%s\n", cmd);
+		if (rc < 0)
 			break;
 
-		result = vfi_get_result(dev,&output);
-		if (result < 0)
+		rc = vfi_get_result(dev,&output);
+		if (rc < 0)
 			break;
 
-		result = vfi_get_dec_arg(output,"result");
+		rc = vfi_get_dec_arg(output,"result", &result);
 
 		printf("%s\n",output);
 
 		free(output);
 	}
 
-	return result;
+	return rc;
 }
 
 /* These are just example threads... */
@@ -85,8 +84,6 @@ void *thr_f(void *h)
 		else
 			done = 1;
 	}
-
-	result = vfi_get_dec_arg(output,"result");
 
 	printf("\t -> %s\n",output);
 	fflush(stdout);
