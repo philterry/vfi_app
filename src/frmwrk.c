@@ -371,14 +371,14 @@ void *source_thread(void *source)
 	struct vfi_async_handle *ah;
 	struct vfi_source *src = (struct vfi_source *)source;
 	ah = vfi_alloc_async_handle(NULL);
-	while (vfi_get_cmd(src,&cmd) && !vfi_dev_done(src->d)) {
+	while (vfi_get_cmd(src,&cmd)) {
 		free(vfi_set_async_handle(ah,NULL));
 		if (!vfi_find_pre_cmd(src->d, ah, &cmd)) {
 			do {
 				vfi_invoke_cmd(src->d,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
 				vfi_wait_async_handle(ah,&result,(void *)&e);
 				printf("%s\n",result);
-			} while (vfi_invoke_closure(e,src->d,ah,result) && !vfi_dev_done(src->d));
+			} while (vfi_invoke_closure(e,src->d,ah,result));
 		}
 	}
 
