@@ -361,7 +361,7 @@ int pipe_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
 	free(elem[func+1]);
 	free(vfi_set_async_handle(ah,pipe));
 
-	return 1;
+	return 0;
 }
 
 int quit_pre_cmd(struct vfi_dev *dev, struct vfi_async_handle *ah, char **cmd)
