@@ -14,7 +14,7 @@ AC_CHECK_PROG([GGO],[gengetopt],[gengetopt])
 
 GTK_DOC_CHECK([1.0])
 
-PKG_CHECK_MODULES(VFI_API,libvfi_api)
+PKG_CHECK_MODULES(VFI_API,libvfi_api libvfi_frmwrk)
 #VFI_PATH_VFI_API
 
 # Checks for libraries.
