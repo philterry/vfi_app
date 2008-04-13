@@ -1,0 +1,104 @@
+<!-- ##### SECTION Title ##### -->
+frmwrk
+
+<!-- ##### SECTION Short_Description ##### -->
+A Framework based Application Sample
+
+<!-- ##### SECTION Long_Description ##### -->
+<para>
+This is an example application exhibiting the use of the framework API to implement the concept of a framework application.
+</para>
+
+
+<!-- ##### SECTION See_Also ##### -->
+<para>
+
+</para>
+
+
+<!-- ##### SECTION Stability_Level ##### -->
+
+
+<!-- ##### FUNCTION get_inputs ##### -->
+<para>
+
+</para>
+
+@s: 
+@command: 
+@Returns: 
+
+
+<!-- ##### FUNCTION setup_inputs ##### -->
+<para>
+
+</para>
+
+@dev: 
+@src: 
+@opts: 
+@Returns: 
+
+
+<!-- ##### FUNCTION show_function ##### -->
+<para>
+
+</para>
+
+@e: 
+@dev: 
+@ah: 
+@result: 
+@Returns: 
+
+
+<!-- ##### FUNCTION copy_function ##### -->
+<para>
+
+</para>
+
+@e: 
+@dev: 
+@ah: 
+@result: 
+@Returns: 
+
+
+<!-- ##### FUNCTION source_thread ##### -->
+<para>
+
+</para>
+
+@source: 
+@Returns: 
+
+
+<!-- ##### FUNCTION process_commands ##### -->
+<para>
+
+</para>
+
+@tid: 
+@src: 
+@opts: 
+@Returns: 
+
+
+<!-- ##### FUNCTION driver_thread ##### -->
+<para>
+
+</para>
+
+@h: 
+@Returns: 
+
+
+<!-- ##### FUNCTION initialize_api_commands ##### -->
+<para>
+
+</para>
+
+@dev: 
+@Returns: 
+
+

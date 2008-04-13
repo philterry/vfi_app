@@ -1,0 +1,12 @@
+<SECTION>
+<FILE>frmwrk</FILE>
+get_inputs
+setup_inputs
+show_function
+copy_function
+source_thread
+process_commands
+driver_thread
+initialize_api_commands
+</SECTION>
+
