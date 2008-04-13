@@ -8,6 +8,8 @@
 
   <chapter>
     <title>Framework Application</title>
+<para>Functions used in the construction of the sample Framework Application. These in turn depend on the framework API libraries which in turn
+build on the base API libraries.</para>
     <xi:include href="xml/frmwrk.xml"/>
   </chapter>
 </book>
