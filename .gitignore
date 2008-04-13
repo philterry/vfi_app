@@ -27,3 +27,4 @@ src/tp_cmdline.c
 src/tp_cmdline.h
 TAGS
 *.tar.gz
+doc
