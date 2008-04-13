@@ -12,6 +12,8 @@ AC_PROG_LIBTOOL
 AC_PROG_CC
 AC_CHECK_PROG([GGO],[gengetopt],[gengetopt])
 
+GTK_DOC_CHECK([1.0])
+
 PKG_CHECK_MODULES(VFI_API,libvfi_api)
 #VFI_PATH_VFI_API
 
@@ -29,5 +31,5 @@ AC_TYPE_SIZE_T
 # Checks for library functions.
 
 AC_CONFIG_FILES([Makefile
-                 src/Makefile])
+                 src/Makefile doc/Makefile])
 AC_OUTPUT

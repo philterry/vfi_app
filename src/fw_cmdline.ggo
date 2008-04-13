@@ -1,4 +1,4 @@
-args "--unamed-opts --default-optional"
+args "--unamed-opts=COMMANDS --default-optional -C -S"
 option "device" d "VFI device" string default="/dev/vfi"
 option "file" f "file of RIL directives" string multiple
 option "interactive" i "interactive shell"
