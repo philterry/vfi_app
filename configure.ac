@@ -14,8 +14,10 @@ AC_CHECK_PROG([GGO],[gengetopt],[gengetopt])
 
 GTK_DOC_CHECK([1.0])
 
+#Uncomment either the following line or the subsequent two lines
 PKG_CHECK_MODULES(VFI_API,libvfi_api libvfi_frmwrk)
 #VFI_PATH_VFI_API
+#VFI_PATH_VFI_FRMWRK
 
 # Checks for libraries.
 AC_CHECK_LIB([pthread],[sem_init])
