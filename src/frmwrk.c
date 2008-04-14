@@ -23,12 +23,6 @@ int setup_inputs(struct vfi_dev *dev, struct vfi_source **src, struct gengetopt_
 	return 0;
 }
 
-/* A sample internal function of the sort which can be invoked by the
- * pipe API pre-command in conjunction with the source processing loop
- * thread. This function is polymorphic in that it parses its
- * signature to determine its input/output parameters. In reality real
- * functions would at most simply check their signature as a debug
- * reality check before processing their fixed function. */
 int show_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, char *result)
 {
 	struct vfi_map **imaps;
@@ -61,10 +55,6 @@ int show_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, ch
 	return 1;
 }
 
-/* A sample internal function of the sort which can be invoked by the
- * pipe API pre-command in conjunction with the source processing loop
- * thread. This function is polymorphic in that it parses its
- * signature to determine its input/output parameters. This function is useful for test scripts. */
 int copy_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, char *result)
 {
 	struct vfi_map **imaps;
