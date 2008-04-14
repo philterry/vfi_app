@@ -1,75 +1,198 @@
-So I go to some directory . and in there I create a directory src
-and a Makefile.am containing
+Welcome to Vmetro's FusionIPC Application Package!
 
-SUBDIRS = src
+You will have obtained this file and the directory it resides in by
+one of two "official" methods. 
 
-then in my src directory I create my testprog.c code
+1. You obtained and unpacked a tarball vfi_app-<version>.tar.gz, or, 
+2. You checked out the latest package from a CVS or GIT server.
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <stdio.h>
+Unofficially you may have unpacked a checkout directory from an
+unofficial tarball, etc.
 
-int main (int argc, char **argv)
-{
-	int fd;
-	char c;
+If there are a lot of files, including a "configure" script in the top
+level directory you have a type 1 above. If there is no configure
+script you probably have a type 2 above, but you may have a borked
+type 1. If you are unsure, obtain a legitimate source from vmetro.com.
 
-	printf("Opening /dev/vfi...");
-	fd = open("/dev/vfi",O_RDWR);
-	if ( fd < 0 ) {
-		perror("failed");
-		return (0);
-	}
-	else
-		printf("OK\n");
+Tarball
+=======
 
-/* 	vfi_smb_create("fred"); */
+If you have a type 1 package follow the installation instructions
+given in ./INSTALL. These are generic instructions. ./configure --help
+is always a good first step to know what features and controls are
+available for this package. See also Useful Tips below.
 
-	scanf("%c", &c);
-	close(fd);
-	
-}
+Checkout
+========
 
-and a Makefile.am containing
+If you have a type 2 package you need to follow a few simple steps to
+bootstrap the package to a type 1. These steps require that you have
+the autotools installed on your development system: autoconf,
+automake, libtool. You should use an up to date version of these tools
+if possible. 
 
-bin_PROGRAMS = testprog
+This package is dependent on the Vmetro FusionIPC API Library package,
+vfi_api, which you must install prior to bootstrapping this package.
 
-so now I have the following directory structure
+Depending on the configure.ac file you will need to follow one of
+the two following steps. You can edit the file to choose which step.
 
-.:
-total 2
--rw-rw-r-- 1 phil phil   14 Jun 26 09:15 Makefile.am
-drwxrwxr-x 2 phil phil 1024 Jul 13 15:05 src
+In configure.ac you will see the following four lines
 
-./src:
-total 2
--rw-rw-r-- 1 phil phil  23 Jun 26 09:02 Makefile.am
--rwxrwSrwt 1 phil phil 352 Jul  2 10:19 testprog.c
+#Uncomment either the following line or the subsequent two lines
+PKG_CHECK_MODULES(VFI_API,libvfi_api libvfi_frmwrk)
+#VFI_PATH_VFI_API
+#VFI_PATH_VFI_FRMWRK
 
-OK, so now issue the following command in the top level directory .
+This uses the pkg-config command to determine package
+dependencies. This requires that you have pkg-config installed on your
+development system. Most modern systems will have this. If you have
+this follow the 'pkg-config step' below. 
 
-touch README ChangeLog AUTHORS NEWS
+If not you can either install pkg-config or edit your configure.ac
+file to use the alternative config script method. To do the latter,
+comment out the PKG_CHECK_MODULES line and uncomment the two
+VFI_PATH... lines and follow the 'config script step' below.
 
-Then its autoscan which will generate you a configure.scan file.
-Edit this as follows and save it as configure.ac 
+config script step
+------------------
 
---- configure.scan	2007-07-13 15:20:35.000000000 -0700
-+++ configure.ac	2007-07-13 15:23:23.000000000 -0700
-@@ -2,7 +2,8 @@
- # Process this file with autoconf to produce a configure script.
- 
- AC_PREREQ(2.59)
--AC_INIT(FULL-PACKAGE-NAME, VERSION, BUG-REPORT-ADDRESS)
-+AC_INIT([vfi_userland], [0.1], [Phil Terry <pterry@micromemory.com>])
-+AM_INIT_AUTOMAKE
- AC_CONFIG_SRCDIR([src/testprog.c])
- AC_CONFIG_HEADER([config.h])
- 
-Now run autoreconf -i
+If you have chosen to use the config script approach you will need to
+point the autoreconf command to the m4 files provided by the vfi_api
+package. If you have installed vfi_api then the m4 files will be in
 
-Now run ./configure
+	<destdir><prefix>/share/aclocal/vfi_api
 
-Now run ./make distcheck
+where <destdir> is the value you used for DESTDIR and <prefix> is the
+value you used for --prefix= when building and installing vfi_api.
 
-Voila this tarball
+if you have unpacked vfi_api but not installed it you can instead find
+them in the source directory
+
+	<vfi_api_source_path>/m4
+
+In the top level directory run 
+
+   autoreconf -i -I <m4>
+
+where <m4> is one of the directories above.
+
+If this is not successful follow the helpful suggestions printed out
+to fix the problem. If you are unsuccessful contact support@vmetro.com
+
+If successful proceed to 'configure step' below.
+
+pkg-config step
+---------------
+
+First in the top level directory run
+
+	autoreconf -i
+
+If this is not successful follow the helpful suggestions printed out
+to fix the problem. If you are unsuccessful contact support@vmetro.com
+
+For the next step you will need to have configured and installed
+vfi_api.
+
+During the 'configure step' below you will need to direct pkg-config
+to look for the libvfi_api.pc files in the pkgconfig directory in the
+lib directory of the installation prefix used when installing vfi_api.
+
+This will either be <prefix> or <destdir><prefix> depending on whether
+you were using DESTDIR for an embedded target install or simply using
+--prefix=  for a host install when you installed vfi_api. See 'Useful
+Tips' below.
+
+In the configure step below you will use
+
+	PKG_CONFIG_PATH=<destdir><prefix/lib/pkgconfig ./configure...
+
+or 
+	PKG_CONFIG_PATH=<prefix>/lib/pkgconfig ./configure ...
+
+depending on your usage when vfi_api was installed. You may need to
+use the other shell conventions depending on your shell.
+
+	setenv PKG_CONFIG_PATH ...
+	./configure ...
+
+for a csh, etc.
+
+configure step
+--------------
+
+Run
+
+   ./configure --help
+
+to decide what if any parameters you wish to use then run
+
+   ./configure <parameters and options>
+
+usually you use --prefix=$HOME/somedir etc., to avoid needing
+superuser access to /usr/local, etc. See Useful Tips below.
+
+If this fails follow the helpful suggestions printed out to fix the
+problem. If you are unsuccessful contact support@vmetro.com
+
+If successful run 
+
+   make distcheck
+
+If this succeeds you should have a ./vfi_app-<version>.tar.gz tarball
+version of your directory and everything is now known to work.
+
+If you wish to give someone a tarball of this package from your
+checkout this is the correct procedure to follow as it will give them
+a clean tarball not contaminated by your local changes and configured
+files and yet doesn't require them to have all the autoconf etc tool
+sets.
+
+Useful Tips
+===========
+
+Run
+
+	make install 
+
+to install this package and
+
+   make uninstall 
+
+to remove it. You may need to be superuser for these two commands
+depending on your access rights to the prefix and/or DESTDIR
+directories.
+
+If you are running on a development system which is also the host
+system to run the code you will typically use --prefix=... to decide
+where to install the code, for example --prefix=/home/me/sandbox
+
+If you are running on a development system where the host system is
+another system, typically an embedded system you will typically use
+--prefix=/usr and then use the DESTDIR envirionment variable to
+actually have the files installed in a staging directory. This will
+either be an NFS exported directory which the target host mounts for
+its root filesystem or a directory which will be used to create an
+initrd or ram filesystem file for an embedded target.
+
+       ./configure --prefix=/usr ...
+       DESTDIR=xxx make ...
+       
+or
+	./configure --prefix=/usr ...
+	setenv DESTDIR xxx
+	make ...
+
+depending on shell type or
+
+	  ./configure --prefix=/usr
+	  make DESTDIR=xxx ...
+
+to use make variable for DESTDIR.
+
+The prefix setting will affect how dynamic libraries and applications
+are linked for run-time, /usr/..., while the DESTDIR prefix affects where the
+files are actually stored during the install, xxx/usr/...
+
+DESTDIR should be a non-relative path, /xxx/xyz/yyy, etc.
