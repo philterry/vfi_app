@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <fw_cmdline.h>
 #include <vfi_frmwrk.h>
+#include <mcheck.h>
 
 int get_inputs(void **s, char **command)
 {
@@ -196,6 +197,8 @@ int main (int argc, char **argv)
 	int ut = 0;
 
 	int rc;
+
+	mtrace();
 
 	cmdline_parser_init(&opts);
 	cmdline_parser(argc,argv,&opts);
