@@ -5,7 +5,7 @@
 #include <vfi_frmwrk.h>
 #include <mcheck.h>
 
-#define MAX_COUNT 1000000
+#define MAX_COUNT 10000
 static int count = 0;
 
 int get_inputs(void **s, char **command)
@@ -276,30 +276,34 @@ void *source_thread(void *source)
 	char *cmd = NULL;
 	char *result = NULL;
 	void **e;
-	//long err;
+	int err = 0;
+	long rslt = 0;
 	struct vfi_async_handle *ah;
 	struct vfi_source *src = (struct vfi_source *)source;
 	ah = vfi_alloc_async_handle(NULL);
 	while (vfi_get_cmd(src,&cmd)) {
-		if (!vfi_find_pre_cmd(src->d, ah, &cmd)) {
+		if (!(err = vfi_find_pre_cmd(src->d, ah, &cmd))) {
 			do {
-				//err = 0; 
+				//printf("%s\n", cmd);
 				vfi_invoke_cmd(src->d,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
 				vfi_wait_async_handle(ah,&result,(void *)&e);
-
-				/* Break the loop on error  */
 #if 0
-				err |= vfi_get_hex_arg(result, "result", &err);
-				if (err) {
-					errno = err;
-					printf("Failed: %s\n", result);
-					perror("Command failed");
-					break;
-				}
+#warning TODO: Remove. 
+				if (vfi_get_dec_arg(result, "result", &rslt))
+					printf("Fatal. Result not found: %s\n", result);
+				else if (rslt)
+					printf("Cmd failed: %s\n", result);
 #endif
-			} while (vfi_invoke_closure(e,src->d,ah,result));
+				//printf("%s\n", result);
+			} while ((err = vfi_invoke_closure(e,src->d,ah,result)) > 0);
 		}
+
 		free(vfi_set_async_handle(ah,NULL));
+		if (err < 0) {
+#warning TODO: Add proper debug output
+			//printf("%s failed with status %ld\n", cmd, err);
+			break;
+		}
 	}
 
 	free(result);
@@ -329,12 +333,17 @@ int initialize_api_commands(struct vfi_dev *dev)
 	vfi_register_func(dev,"send",send_function);
 	vfi_register_func(dev,"perf",perf_function);
 
+	vfi_register_pre_cmd(dev,"location_find",location_find_pre_cmd);
 	vfi_register_pre_cmd(dev,"pipe",pipe_pre_cmd);
 	vfi_register_pre_cmd(dev,"bind_create",bind_create_pre_cmd);
 	vfi_register_pre_cmd(dev,"smb_create",smb_create_pre_cmd);
 	vfi_register_pre_cmd(dev,"smb_mmap",smb_mmap_pre_cmd);
 	vfi_register_pre_cmd(dev,"sync_find",sync_find_pre_cmd);
 	vfi_register_pre_cmd(dev,"event_find",event_find_pre_cmd);
+
+	vfi_register_pre_cmd(dev,"map_init",map_init_pre_cmd);
+	vfi_register_pre_cmd(dev,"map_check",map_check_pre_cmd);
+
 	vfi_register_pre_cmd(dev,"quit",quit_pre_cmd);
 
 	return 0;
