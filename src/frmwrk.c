@@ -1,9 +1,13 @@
 #include <vfi_api.h>
+#include <vfi_frmwrk.h>
+#include <vfi_log.h>
 #include <pthread.h>
 #include <time.h>
 #include <fw_cmdline.h>
-#include <vfi_frmwrk.h>
 #include <mcheck.h>
+
+#define MY_ERROR VFI_DBG_DEFAULT
+#define MY_DEBUG (VFI_DBG_EVERYONE | VFI_DBG_EVERYTHING | VFI_LOG_DEBUG)
 
 #define MAX_COUNT 10000
 static int count = 0;
@@ -30,18 +34,22 @@ int setup_inputs(struct vfi_dev *dev, struct vfi_source **src, struct gengetopt_
 
 int count_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, char *result)
 {
-	long res;
+	long rslt;
 	int sig = (unsigned int)e[1] ^ (unsigned int)count_function;
 	
 	if (sig & ~0xffff) {
-		printf("Closure has errors. Stopping\n");
-		return 0;
+		vfi_log(VFI_LOG_ERR, "%s: Closure has errors. Stopping", __func__);
+		return VFI_RESULT(-EINVAL);
 	}
 
-	/* Stop the loop on error  */
-	if (vfi_get_hex_arg(result, "result", &res) && res) {
-		printf("Failed: %s\n", result);
-		return 0;
+	if (vfi_get_dec_arg(result,"result",&rslt)) {
+		vfi_log(VFI_LOG_EMERG, "%s: Fatal error. Result string not returned from driver", __func__);
+		return VFI_RESULT(-EIO);
+	}
+
+	if (rslt) {
+		vfi_log(VFI_LOG_ERR, "%s: Command failed with error %ld (%s)", __func__, rslt, result);
+		return VFI_RESULT((int)rslt);
 	}
 
 	printf("Transfer Count = %d", ++count);
@@ -58,18 +66,22 @@ int count_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, c
 
 int send_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, char *result)
 {
-	long res;
+	long rslt;
 	int sig = (unsigned int)e[1] ^ (unsigned int)count_function;
 	
 	if (sig & ~0xffff) {
-		printf("Closure has errors. Stopping\n");
-		return 0;
+		vfi_log(VFI_LOG_ERR, "%s: Closure has errors. Stopping", __func__);
+		return VFI_RESULT(-EINVAL);
 	}
 
-	/* Stop the loop on error  */
-	if (vfi_get_hex_arg(result, "result", &res) && res) {
-		printf("Failed: %s\n", result);
-		return 0;
+	if (vfi_get_dec_arg(result,"result",&rslt)) {
+		vfi_log(VFI_LOG_EMERG, "%s: Fatal error. Result string not returned from driver", __func__);
+		return VFI_RESULT(-EIO);
+	}
+
+	if (rslt) {
+		vfi_log(VFI_LOG_ERR, "%s: Command failed with error %ld (%s)", __func__, rslt, result);
+		return VFI_RESULT((int)rslt);
 	}
 
 	if (++count == MAX_COUNT) {
@@ -155,7 +167,7 @@ static void print_perf(struct timespec *start, struct timespec *stop, double nby
 
 int perf_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, char *result)
 {
-	long res;
+	long rslt;
 	static struct timespec start;
 	static struct timespec stop;
 	static double nbytes;
@@ -163,14 +175,18 @@ int perf_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, ch
 	struct vfi_map *map = (struct vfi_map *)e[2];
 	
 	if (sig & ~0xffff) {
-		printf("Closure has errors. Stopping\n");
-		return 0;
+		vfi_log(VFI_LOG_ERR, "%s: Closure has errors. Stopping", __func__);
+		return VFI_RESULT(-EINVAL);
+	}
+	
+	if (vfi_get_dec_arg(result,"result",&rslt)) {
+		vfi_log(VFI_LOG_EMERG, "%s: Fatal error. Result string not returned from driver", __func__);
+		return VFI_RESULT(-EIO);
 	}
 
-	/* Stop the loop on error  */
-	if (!vfi_get_hex_arg(result, "result", &res) && res) {
-		printf("Failed: %s\n", result);
-		return 0;
+	if (rslt) {
+		vfi_log(VFI_LOG_ERR, "%s: Command failed with error %ld (%s)", __func__, rslt, result);
+		return VFI_RESULT((int)rslt);
 	}
 
 	switch (++count) {
@@ -179,14 +195,18 @@ int perf_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, ch
 		break;
 
 	case 2:
-		if (clock_gettime(CLOCK_REALTIME, &start))
-			perror("clock_gettime start failed");
+		if (clock_gettime(CLOCK_REALTIME, &start)) {
+			vfi_log(VFI_LOG_ERR, "%s: clock_gettime failed with error %d", __func__, errno);
+			return VFI_RESULT(-errno);
+		}
 		nbytes = 0;
 		break;
 
 	case MAX_COUNT:
-		if (clock_gettime(CLOCK_REALTIME, &stop))
-			perror("clock_gettime stop failed");
+		if (clock_gettime(CLOCK_REALTIME, &stop)) {
+			vfi_log(VFI_LOG_ERR, "%s: clock_gettime failed with error %d", __func__, errno);
+			return VFI_RESULT(-errno);
+		}
 		nbytes += (double)map->extent; 
 		print_perf(&start, &stop, nbytes, (double)map->extent);
 		count = 0;
@@ -207,11 +227,25 @@ int show_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, ch
 	int numi;
 	int numo;
 	int i;
+	long rslt;
 
 	int sig = (unsigned int)e[1] ^ (unsigned int)show_function;
 	
-	if (sig & ~0xffff)
-		return 0;
+	if (sig & ~0xffff) {
+		vfi_log(VFI_LOG_ERR, "%s: Closure has errors. Stopping", __func__);
+		return VFI_RESULT(-EINVAL);
+	}
+
+	if (vfi_get_dec_arg(result,"result",&rslt)) {
+		vfi_log(VFI_LOG_EMERG, "%s: Fatal error. Result string not returned from driver", __func__);
+		return VFI_RESULT(-EIO);
+	}
+
+	if (rslt) {
+		vfi_log(VFI_LOG_ERR, "%s: Command failed with error %ld (%s)", __func__, rslt, result);
+		return VFI_RESULT((int)rslt);
+	}
+
 
 	imaps = (struct vfi_map **)&e[2];
 	numi = sig & 0xff;
@@ -241,11 +275,24 @@ int copy_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, ch
 	int in = 0,out = 0;
 	int done = 0;
 	int size;
+	long rslt;
 
 	int sig = (unsigned int)e[1] ^ (unsigned int)show_function;
 	
-	if (sig & ~0xffff)
-		return 0;
+	if (sig & ~0xffff) {
+		vfi_log(VFI_LOG_ERR, "%s: Closure has errors. Stopping", __func__);
+		return VFI_RESULT(-EINVAL);
+	}
+
+	if (vfi_get_dec_arg(result,"result",&rslt)) {
+		vfi_log(VFI_LOG_EMERG, "%s: Fatal error. Result string not returned from driver", __func__);
+		return VFI_RESULT(-EIO);
+	}
+
+	if (rslt) {
+		vfi_log(VFI_LOG_ERR, "%s: Command failed with error %ld (%s)", __func__, rslt, result);
+		return VFI_RESULT((int)rslt);
+	}
 
 	imaps = (struct vfi_map **)&e[2];
 	numi = sig & 0xff;
@@ -281,7 +328,13 @@ void *source_thread(void *source)
 	struct vfi_async_handle *ah;
 	struct vfi_source *src = (struct vfi_source *)source;
 	ah = vfi_alloc_async_handle(NULL);
+	if (!ah) {
+		vfi_log(VFI_LOG_ERR, "%s: Failed to allocate async handle", __func__);
+		return 0;
+	}
+
 	while (vfi_get_cmd(src,&cmd)) {
+		VFI_DEBUG(MY_DEBUG, "%s Got command: %s\n", __func__, cmd);
 		if (!(err = vfi_find_pre_cmd(src->d, ah, &cmd))) {
 			do {
 				//printf("%s\n", cmd);
@@ -294,14 +347,13 @@ void *source_thread(void *source)
 				else if (rslt)
 					printf("Cmd failed: %s\n", result);
 #endif
-				//printf("%s\n", result);
-			} while ((err = vfi_invoke_closure(e,src->d,ah,result)) > 0);
+			} while ((err = (int)vfi_invoke_closure(e,src->d,ah,result)) > 0);
 		}
 
 		free(vfi_set_async_handle(ah,NULL));
 		if (err < 0) {
-#warning TODO: Add proper debug output
-			//printf("%s failed with status %ld\n", cmd, err);
+			vfi_log(VFI_LOG_ERR, "%s: Command processing resulted in error %d\n", __func__, err);
+#warning Is break here correct. May be OK in a script but not in interactive mode
 			break;
 		}
 	}
@@ -368,6 +420,9 @@ int main (int argc, char **argv)
 	int ut = 0;
 
 	int rc;
+	int cnt;
+
+	vfi_debug_level = MY_DEBUG;
 
 	/* Simple memory alloc and free tracing */
 	mtrace();
@@ -383,8 +438,8 @@ int main (int argc, char **argv)
 
 	pthread_create(&driver_tid,0,driver_thread,(void *)dev);
 	
-	while (opts.file_given--) {
-		FILE *file = fopen(*opts.file_arg++,"r");
+	for (cnt = 0; cnt < opts.file_given; cnt++) {
+		FILE *file = fopen(opts.file_arg[cnt],"r");
 		if (!vfi_setup_file(dev,&file_src,file))
 			ft = process_commands(&file_tid, file_src, &opts) == 0;
 	}
@@ -414,9 +469,7 @@ int main (int argc, char **argv)
 		free(input_src);
 
 	vfi_close(dev);
-
-	// We're messing with the opts so don't free it.
-	//cmdline_parser_free(&opts);
+	cmdline_parser_free(&opts);
 
 	return 0;
 }
