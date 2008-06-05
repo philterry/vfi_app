@@ -421,9 +421,9 @@ int main (int argc, char **argv)
 
 	int rc;
 	int cnt;
-
+#ifdef VFI_DBG
 	vfi_debug_level = MY_DEBUG;
-
+#endif
 	/* Simple memory alloc and free tracing */
 	mtrace();
 

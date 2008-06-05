@@ -28,3 +28,5 @@ src/tp_cmdline.h
 TAGS
 *.tar.gz
 doc
+aclocal.m4
+libtool
