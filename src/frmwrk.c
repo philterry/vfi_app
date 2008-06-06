@@ -379,11 +379,11 @@ void *driver_thread(void *h)
 
 int initialize_api_commands(struct vfi_dev *dev)
 {
-	vfi_register_func(dev,"show",show_function);
-	vfi_register_func(dev,"copy",copy_function);
-	vfi_register_func(dev,"count",count_function);
-	vfi_register_func(dev,"send",send_function);
-	vfi_register_func(dev,"perf",perf_function);
+	vfi_register_func(dev,"show",show_function,-1,-1);
+	vfi_register_func(dev,"copy",copy_function,-1,-1);
+	vfi_register_func(dev,"count",count_function,1,1);
+	vfi_register_func(dev,"send",send_function,-1,-1);
+	vfi_register_func(dev,"perf",perf_function,-1,-1);
 
 	vfi_register_pre_cmd(dev,"location_find",location_find_pre_cmd);
 	vfi_register_pre_cmd(dev,"pipe",pipe_pre_cmd);
@@ -470,6 +470,7 @@ int main (int argc, char **argv)
 
 	vfi_close(dev);
 	cmdline_parser_free(&opts);
+	muntrace();
 
 	return 0;
 }
