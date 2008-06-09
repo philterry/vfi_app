@@ -435,6 +435,7 @@ int main (int argc, char **argv)
 		struct thread_arg targ;
 		struct thread_info *next;
 		bool do_teardown;
+		FILE *file;
 	};
 		
 	struct thread_info *tinfo_list = NULL;
@@ -459,13 +460,11 @@ int main (int argc, char **argv)
 	pthread_create(&driver_tid,0,driver_thread,(void *)dev);
 	
 	for (cnt = 0; cnt < opts.file_given; cnt++) {
-		FILE *file;
 		struct thread_info *tinfo = calloc (1,sizeof(struct thread_info));
 		if (tinfo == NULL)
 			break;
 
-		file = fopen(opts.file_arg[cnt],"r");
-		if (!file) {
+		if (!(tinfo->file = fopen(opts.file_arg[cnt],"r"))) {
 			vfi_log(VFI_LOG_ERR, "%s: Failed to open file %s", __func__, opts.file_arg[cnt]);
 			free(tinfo);
 			break;
@@ -473,7 +472,7 @@ int main (int argc, char **argv)
 
 		tinfo->targ.stop_on_error = true;
 	
-		if (vfi_setup_file(dev,&(tinfo->targ.src),file)) {
+		if (vfi_setup_file(dev,&(tinfo->targ.src),tinfo->file)) {
 			free(tinfo);
 			continue;
 		}
@@ -527,6 +526,8 @@ int main (int argc, char **argv)
 		struct thread_info *tinfo = tinfo_list; 
 		pthread_join(tinfo->tid,NULL);
 		tinfo_list = tinfo_list->next;
+		if (tinfo->file)
+			fclose(tinfo->file);
 		free(tinfo->targ.src); free(tinfo);
 	}
 	
