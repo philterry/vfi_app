@@ -424,10 +424,11 @@ int initialize_api_commands(struct vfi_dev *dev)
 int main (int argc, char **argv)
 {
 	struct gengetopt_args_info opts;
-	struct vfi_dev *dev;
+	struct vfi_dev *dev = NULL;
 	pthread_t driver_tid;
 	int rc;
 	int cnt;
+	bool spawn = true;
 	
 	struct thread_info 
 	{
@@ -452,71 +453,119 @@ int main (int argc, char **argv)
 	cmdline_parser(argc,argv,&opts);
 
 	rc = vfi_open(&dev,opts.device_arg,opts.timeout_arg);
-	if (rc)
-		return rc;
+	if (rc) {
+		vfi_log(VFI_LOG_ERR, "%s: Failed to open %s. Error is %d", __func__, opts.device_arg, rc);
+		if (opts.verbose_given || opts.interactive_given)
+			printf("%s: Failed to open %s. Error is %d\n", __func__, opts.device_arg, rc);
+		goto end;
+	}
 	
 	initialize_api_commands(dev);
 
-	pthread_create(&driver_tid,0,driver_thread,(void *)dev);
-	
+	if (opts.sequential_given)
+		spawn = false;
+
+	/* Create framework thread */
+	if (rc = pthread_create(&driver_tid,0,driver_thread,(void *)dev)) {
+		vfi_log(VFI_LOG_ERR, "%s: Failed to create thread. Error is %d", __func__, rc);
+		if (opts.verbose_given || opts.interactive_given)
+			printf("%s: Failed to create thread. Error is %d\n", __func__, rc);
+		goto end;
+	}
+		
+	/* Script files */
 	for (cnt = 0; cnt < opts.file_given; cnt++) {
 		struct thread_info *tinfo = calloc (1,sizeof(struct thread_info));
 		if (tinfo == NULL)
 			break;
 
 		if (!(tinfo->file = fopen(opts.file_arg[cnt],"r"))) {
+			rc = -EINVAL;
 			vfi_log(VFI_LOG_ERR, "%s: Failed to open file %s", __func__, opts.file_arg[cnt]);
+			if (opts.verbose_given || opts.interactive_given)
+				perror(opts.file_arg[cnt]);
 			free(tinfo);
 			break;
 		}
 
 		tinfo->targ.stop_on_error = true;
+		if (opts.verbose_given)
+			tinfo->targ.verbose = true;
 	
-		if (vfi_setup_file(dev,&(tinfo->targ.src),tinfo->file)) {
+		if (rc = vfi_setup_file(dev,&(tinfo->targ.src),tinfo->file)) {
+			fclose(tinfo->file);
 			free(tinfo);
-			continue;
+			break;
 		}
 
-		if (process_commands(&(tinfo->tid),&(tinfo->targ),true)) {
+		if (rc = process_commands(&(tinfo->tid),&(tinfo->targ),spawn)) {
+			fclose(tinfo->file);
+			free(tinfo->targ.src);
 			free(tinfo);
 			break;
 		}
 		
-		tinfo->next = tinfo_list;
-		tinfo_list = tinfo;
+		if (spawn) {
+			tinfo->next = tinfo_list;
+			tinfo_list = tinfo;
+		}
+		else {
+			fclose(tinfo->file);
+			free(tinfo->targ.src);
+			free(tinfo);
+		}
 	}
 
+	/* Command line */
 	if (opts.inputs_num) {
 		struct thread_info *tinfo = calloc (1,sizeof(struct thread_info));
 		if (tinfo) {
 			tinfo->targ.stop_on_error = true;
-			if (setup_inputs(dev,&(tinfo->targ.src),opts.inputs,opts.inputs_num))
+			if (opts.verbose_given)
+				tinfo->targ.verbose = true;
+
+			if (rc = setup_inputs(dev,&(tinfo->targ.src),opts.inputs,opts.inputs_num))
 				free(tinfo);
 			else {
-				if (process_commands(&(tinfo->tid),&(tinfo->targ),true))
+				if (rc = process_commands(&(tinfo->tid),&(tinfo->targ),spawn)) {
+					free(tinfo->targ.src);
 					free(tinfo);
-				else {
-					tinfo->next = tinfo_list;
-					tinfo_list = tinfo;	
 				}
+				else
+					if (spawn) {
+						tinfo->next = tinfo_list;
+						tinfo_list = tinfo;	
+					}
+					else {
+						free(tinfo->targ.src);
+						free(tinfo);
+					}
 			}
 		}
 	}
 
+	/* Interactive */
 	if (opts.interactive_given) {
 		struct thread_info *tinfo = calloc (1,sizeof(struct thread_info));
 		if (tinfo) {
 			tinfo->targ.stop_on_error = false;
 			tinfo->targ.verbose = true;
-			if (vfi_setup_file(dev,&(tinfo->targ.src),stdin))
+			if (rc = vfi_setup_file(dev,&(tinfo->targ.src),stdin))
 				free(tinfo);
 			else {
-				if (process_commands(&(tinfo->tid),&(tinfo->targ),true))
+				if (rc = process_commands(&(tinfo->tid),&(tinfo->targ),spawn)) {
+					free(tinfo->targ.src);
 					free(tinfo);
-				else {
-					tinfo->next = tinfo_list;
-					tinfo_list = tinfo;	
 				}
+				else
+					if (spawn) {
+						tinfo->next = tinfo_list;
+						tinfo_list = tinfo;	
+					}
+					else {
+						free(tinfo->targ.src);
+						free(tinfo);
+					}
 			}
 		}
 	}
@@ -533,9 +582,11 @@ int main (int argc, char **argv)
 	
 	vfi_set_dev_done(dev);
 	pthread_join(driver_tid,NULL);
-	vfi_close(dev);
+ end:
+	if (dev)
+		vfi_close(dev);
 	cmdline_parser_free(&opts);
 	muntrace();
 
-	return 0;
+	return rc;
 }
