@@ -3,3 +3,5 @@ option "device" d "VFI device" string default="/dev/vfi"
 option "file" f "file of RIL directives" string multiple
 option "interactive" i "interactive shell"
 option "timeout" t "timeout" int default="1000"
+option "verbose" v "output to stdout"
+option "sequential" s "run input files and commands sequentially"
