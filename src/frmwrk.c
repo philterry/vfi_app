@@ -5,30 +5,41 @@
 #include <time.h>
 #include <fw_cmdline.h>
 #include <mcheck.h>
+#include <stdbool.h>
 
 #define MY_ERROR VFI_DBG_DEFAULT
 #define MY_DEBUG (VFI_DBG_EVERYONE | VFI_DBG_EVERYTHING | VFI_LOG_DEBUG)
+
+struct thread_arg 
+{
+	struct vfi_source *src;
+	bool verbose;
+	bool stop_on_error;
+};
 
 #define MAX_COUNT 10000
 static int count = 0;
 
 int get_inputs(void **s, char **command)
 {
-	struct gengetopt_args_info *opts = *s;
-	*command = *(opts->inputs++);
-	return opts->inputs_num--;
+	struct {char **inputs; int inputs_num;} *input = *s;
+	*command = *(input->inputs++);
+	return input->inputs_num--;
 }
 
-int setup_inputs(struct vfi_dev *dev, struct vfi_source **src, struct gengetopt_args_info *opts)
+int setup_inputs(struct vfi_dev *dev, struct vfi_source **src, char **inputs, int inputs_num)
 {
 	struct vfi_source *h = malloc(sizeof(*h)+sizeof(void *));
+	struct {char **inputs; int inputs_num;} *inp = calloc(1,sizeof(*inp));
+	inp->inputs = inputs;
+	inp->inputs_num = inputs_num;
 	*src = h;
 	if (*src == NULL)
 		return -ENOMEM;
 
 	h->f = get_inputs;
 	h->d = dev;
-	h->h[0] = (void *)opts;
+	h->h[0] = (void *)inp;
 	return 0;
 }
 
@@ -318,7 +329,7 @@ int copy_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, ch
 	return 1;
 }
 
-void *source_thread(void *source)
+void *source_thread(void *arg)
 {
 	char *cmd = NULL;
 	char *result = NULL;
@@ -326,7 +337,8 @@ void *source_thread(void *source)
 	int err = 0;
 	long rslt = 0;
 	struct vfi_async_handle *ah;
-	struct vfi_source *src = (struct vfi_source *)source;
+	struct thread_arg *targ = (struct thread_arg *)arg;
+	struct vfi_source *src = (struct vfi_source *)targ->src;
 	ah = vfi_alloc_async_handle(NULL);
 	if (!ah) {
 		vfi_log(VFI_LOG_ERR, "%s: Failed to allocate async handle", __func__);
@@ -336,8 +348,9 @@ void *source_thread(void *source)
 	while (vfi_get_cmd(src,&cmd)) {
 		VFI_DEBUG(MY_DEBUG, "%s Got command: %s\n", __func__, cmd);
 		if (!(err = vfi_find_pre_cmd(src->d, ah, &cmd))) {
+			if (targ->verbose)
+				printf("%s\n",cmd);
 			do {
-				//printf("%s\n", cmd);
 				vfi_invoke_cmd(src->d,"%s%srequest(%p)\n",cmd,strstr(cmd, "?") ? ",":"?",ah);
 				vfi_wait_async_handle(ah,&result,(void *)&e);
 #if 0
@@ -348,13 +361,16 @@ void *source_thread(void *source)
 					printf("Cmd failed: %s\n", result);
 #endif
 			} while ((err = (int)vfi_invoke_closure(e,src->d,ah,result)) > 0);
+
+			if (targ->verbose)
+				printf("%s\n",result);
 		}
 
 		free(vfi_set_async_handle(ah,NULL));
 		if (err < 0) {
 			vfi_log(VFI_LOG_ERR, "%s: Command processing resulted in error %d\n", __func__, err);
-#warning Is break here correct. May be OK in a script but not in interactive mode
-			break;
+			if (targ->stop_on_error)
+				break;
 		}
 	}
 
@@ -363,9 +379,13 @@ void *source_thread(void *source)
 	return 0;
 }
 
-int process_commands(pthread_t *tid, struct vfi_source *src, struct gengetopt_args_info *opts)
+int process_commands(pthread_t *tid, struct thread_arg *targ, bool spawn)
 {
-	return pthread_create(tid,0,source_thread,(void *)src);
+	if (spawn)
+		return pthread_create(tid,0,source_thread,(void *)targ);
+	else
+		source_thread((void *)targ);
+	return 0;
 }
 
 void *driver_thread(void *h)
@@ -405,25 +425,25 @@ int main (int argc, char **argv)
 {
 	struct gengetopt_args_info opts;
 	struct vfi_dev *dev;
-	struct vfi_source *file_src = NULL;
-	struct vfi_source *stdin_src = NULL;
-	struct vfi_source *input_src = NULL;
-
 	pthread_t driver_tid;
-
-	pthread_t file_tid;
-	pthread_t opts_tid;
-	pthread_t user_tid;
-
-	int ft = 0;
-	int ot = 0;
-	int ut = 0;
-
 	int rc;
 	int cnt;
+	
+	struct thread_info 
+	{
+		pthread_t tid;
+		struct thread_arg targ;
+		struct thread_info *next;
+		bool do_teardown;
+	};
+		
+	struct thread_info *tinfo_list = NULL;
+
+
 #ifdef VFI_DBG
 	vfi_debug_level = MY_DEBUG;
 #endif
+
 	/* Simple memory alloc and free tracing */
 	mtrace();
 
@@ -439,35 +459,79 @@ int main (int argc, char **argv)
 	pthread_create(&driver_tid,0,driver_thread,(void *)dev);
 	
 	for (cnt = 0; cnt < opts.file_given; cnt++) {
-		FILE *file = fopen(opts.file_arg[cnt],"r");
-		if (!vfi_setup_file(dev,&file_src,file))
-			ft = process_commands(&file_tid, file_src, &opts) == 0;
+		FILE *file;
+		struct thread_info *tinfo = calloc (1,sizeof(struct thread_info));
+		if (tinfo == NULL)
+			break;
+
+		file = fopen(opts.file_arg[cnt],"r");
+		if (!file) {
+			vfi_log(VFI_LOG_ERR, "%s: Failed to open file %s", __func__, opts.file_arg[cnt]);
+			free(tinfo);
+			break;
+		}
+
+		tinfo->targ.stop_on_error = true;
+	
+		if (vfi_setup_file(dev,&(tinfo->targ.src),file)) {
+			free(tinfo);
+			continue;
+		}
+
+		if (process_commands(&(tinfo->tid),&(tinfo->targ),true)) {
+			free(tinfo);
+			break;
+		}
+		
+		tinfo->next = tinfo_list;
+		tinfo_list = tinfo;
 	}
 
 	if (opts.inputs_num) {
-		if (!setup_inputs(dev,&input_src,&opts))
-			ot = process_commands(&opts_tid, input_src, &opts) == 0;
+		struct thread_info *tinfo = calloc (1,sizeof(struct thread_info));
+		if (tinfo) {
+			tinfo->targ.stop_on_error = true;
+			if (setup_inputs(dev,&(tinfo->targ.src),opts.inputs,opts.inputs_num))
+				free(tinfo);
+			else {
+				if (process_commands(&(tinfo->tid),&(tinfo->targ),true))
+					free(tinfo);
+				else {
+					tinfo->next = tinfo_list;
+					tinfo_list = tinfo;	
+				}
+			}
+		}
 	}
 
 	if (opts.interactive_given) {
-		if (!vfi_setup_file(dev,&stdin_src,stdin))
-			ut = process_commands(&user_tid, stdin_src, &opts) == 0;
+		struct thread_info *tinfo = calloc (1,sizeof(struct thread_info));
+		if (tinfo) {
+			tinfo->targ.stop_on_error = false;
+			tinfo->targ.verbose = true;
+			if (vfi_setup_file(dev,&(tinfo->targ.src),stdin))
+				free(tinfo);
+			else {
+				if (process_commands(&(tinfo->tid),&(tinfo->targ),true))
+					free(tinfo);
+				else {
+					tinfo->next = tinfo_list;
+					tinfo_list = tinfo;	
+				}
+			}
+		}
 	}
 
-	if (ft) pthread_join(file_tid,0);
-	if (ot) pthread_join(opts_tid,0);
-	if (ut) pthread_join(user_tid,0);
-
+	/* Wait for the spawned children if any */
+	while (tinfo_list != NULL) {
+		struct thread_info *tinfo = tinfo_list; 
+		pthread_join(tinfo->tid,NULL);
+		tinfo_list = tinfo_list->next;
+		free(tinfo->targ.src); free(tinfo);
+	}
+	
 	vfi_set_dev_done(dev);
 	pthread_join(driver_tid,NULL);
-
-	if (file_src)
-		vfi_teardown_file(file_src);
-	if (stdin_src)
-		vfi_teardown_file(stdin_src);
-	if (input_src)
-		free(input_src);
-
 	vfi_close(dev);
 	cmdline_parser_free(&opts);
 	muntrace();
