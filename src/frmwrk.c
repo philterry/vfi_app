@@ -415,6 +415,7 @@ int initialize_api_commands(struct vfi_dev *dev)
 
 	vfi_register_pre_cmd(dev,"map_init",map_init_pre_cmd);
 	vfi_register_pre_cmd(dev,"map_check",map_check_pre_cmd);
+	vfi_register_pre_cmd(dev,"map_install",map_install_pre_cmd);
 
 	vfi_register_pre_cmd(dev,"quit",quit_pre_cmd);
 
@@ -439,6 +440,7 @@ int unregister_api_commands(struct vfi_dev *dev)
 
 	vfi_unregister_pre_cmd(dev,"map_init");
 	vfi_unregister_pre_cmd(dev,"map_check");
+	vfi_unregister_pre_cmd(dev,"map_install");
 
 	vfi_unregister_pre_cmd(dev,"quit");
 
