@@ -405,12 +405,13 @@ int initialize_api_commands(struct vfi_dev *dev)
 	vfi_register_func(dev,"send",send_function,-1,-1);
 	vfi_register_func(dev,"perf",perf_function,-1,-1);
 
-	vfi_register_pre_cmd(dev,"location_find",location_find_pre_cmd);
+	vfi_register_pre_cmd(dev,"location_find",wait_pre_cmd);
 	vfi_register_pre_cmd(dev,"pipe",pipe_pre_cmd);
 	vfi_register_pre_cmd(dev,"bind_create",bind_create_pre_cmd);
 	vfi_register_pre_cmd(dev,"smb_create",smb_create_pre_cmd);
 	vfi_register_pre_cmd(dev,"mmap_create",mmap_create_pre_cmd);
-	vfi_register_pre_cmd(dev,"sync_find",sync_find_pre_cmd);
+	vfi_register_pre_cmd(dev,"sync_wait",wait_pre_cmd);
+	vfi_register_pre_cmd(dev,"sync_find",wait_pre_cmd);
 	vfi_register_pre_cmd(dev,"event_find",event_find_pre_cmd);
 
 	vfi_register_pre_cmd(dev,"map_init",map_init_pre_cmd);
@@ -435,6 +436,7 @@ int unregister_api_commands(struct vfi_dev *dev)
 	vfi_unregister_pre_cmd(dev,"bind_create");
 	vfi_unregister_pre_cmd(dev,"smb_create");
 	vfi_unregister_pre_cmd(dev,"mmap_create");
+	vfi_unregister_pre_cmd(dev,"sync_wait");
 	vfi_unregister_pre_cmd(dev,"sync_find");
 	vfi_unregister_pre_cmd(dev,"event_find");
 
