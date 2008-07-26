@@ -1,3 +1,0 @@
-location_create://fabric#1:1?default_ops(private),dma_name(rddma_net_dma),fabric(rddma_fabric_net)
-location_create://fujitsu.fabric#1
-location_create://lenovo.fabric#2?default_ops(public)

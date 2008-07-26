@@ -1,7 +1,0 @@
-location_create://fabric#1:1?default_ops(private),dma_name(vfi_rio_dma),fabric(vfi_fabric_rionet)
-location_create://master.fabric#1
-location_create://slave.fabric#2?default_ops(public)
-smb_create://buf1.master.fabric:4000
-xfer_create://dma.master.fabric
-bind_create://dma.master.fabric:4000/buf1.slave.fabric?event_name(ping)=buf1.master.fabric?event_name(ping)
-event_start://ping.master.fabric
