@@ -405,20 +405,7 @@ int initialize_api_commands(struct vfi_dev *dev)
 	vfi_register_func(dev,"send",send_function,-1,-1);
 	vfi_register_func(dev,"perf",perf_function,-1,-1);
 
-	vfi_register_pre_cmd(dev,"location_find",wait_pre_cmd);
-	vfi_register_pre_cmd(dev,"pipe",pipe_pre_cmd);
-	vfi_register_pre_cmd(dev,"bind_create",bind_create_pre_cmd);
-	vfi_register_pre_cmd(dev,"smb_create",smb_create_pre_cmd);
-	vfi_register_pre_cmd(dev,"mmap_create",mmap_create_pre_cmd);
-	vfi_register_pre_cmd(dev,"sync_wait",wait_pre_cmd);
-	vfi_register_pre_cmd(dev,"sync_find",wait_pre_cmd);
-	vfi_register_pre_cmd(dev,"event_find",event_find_pre_cmd);
-
-	vfi_register_pre_cmd(dev,"map_init",map_init_pre_cmd);
-	vfi_register_pre_cmd(dev,"map_check",map_check_pre_cmd);
-	vfi_register_pre_cmd(dev,"map_install",map_install_pre_cmd);
-
-	vfi_register_pre_cmd(dev,"quit",quit_pre_cmd);
+	vfi_initialize_api(dev);
 
 	return 0;
 }
@@ -431,20 +418,7 @@ int unregister_api_commands(struct vfi_dev *dev)
 	vfi_unregister_func(dev,"send",NULL,NULL,NULL);
 	vfi_unregister_func(dev,"perf",NULL,NULL,NULL);
 
-	vfi_unregister_pre_cmd(dev,"location_find");
-	vfi_unregister_pre_cmd(dev,"pipe");
-	vfi_unregister_pre_cmd(dev,"bind_create");
-	vfi_unregister_pre_cmd(dev,"smb_create");
-	vfi_unregister_pre_cmd(dev,"mmap_create");
-	vfi_unregister_pre_cmd(dev,"sync_wait");
-	vfi_unregister_pre_cmd(dev,"sync_find");
-	vfi_unregister_pre_cmd(dev,"event_find");
-
-	vfi_unregister_pre_cmd(dev,"map_init");
-	vfi_unregister_pre_cmd(dev,"map_check");
-	vfi_unregister_pre_cmd(dev,"map_install");
-
-	vfi_unregister_pre_cmd(dev,"quit");
+	vfi_clear_api(dev);
 
 	return 0;
 }
