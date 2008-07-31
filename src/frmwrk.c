@@ -288,7 +288,7 @@ int copy_function(void **e, struct vfi_dev *dev, struct vfi_async_handle *ah, ch
 	int size;
 	long rslt;
 
-	int sig = (unsigned int)e[1] ^ (unsigned int)show_function;
+	int sig = (unsigned int)e[1] ^ (unsigned int)copy_function;
 	
 	if (sig & ~0xffff) {
 		vfi_log(VFI_LOG_ERR, "%s: Closure has errors. Stopping", __func__);
