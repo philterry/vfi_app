@@ -1,0 +1,173 @@
+#!/bin/bash
+while getopts :pude OPT; do
+    case $OPT in
+	p|+p)
+	    dopipe=yes
+	    ;;
+	u|+u)
+	    dounixpipe=yes
+	    ;;
+	d|+d)
+	    dodist=yes
+	    ;;
+	e|+e)
+	    doexec=yes
+	    ;;
+	*)
+	    echo "usage: ${0##*/} [+-p] [+-d] [+-e] [--] ARGS..."
+	    exit 2
+    esac
+done
+shift $[ OPTIND - 1 ]
+
+# Customize your script by editing the following lines
+#=====================================================
+# Which backend drivers to use for fabric and DMA.
+fabric_name=vfi_fabric_rionet
+dma_name=vfi_dma_rio
+# Create a one to one corresponding list of IP addresses and host names
+# The host names don't need to be DNS names but are used to name locations
+# within FusionIPC
+# This is a simple 2 host example.
+hosts=(192.168.0.86 192.168.0.108)
+hostnames=(eightsix oneoeight)
+# List the one to one corresponding ssh logins for each host.
+user=(phil phil)
+#======================================================
+# You should not need to edit anything else in this file
+
+# The first host listed is assumed to be the "master" which orchestrates 
+# everyone else.
+echo "I am $hostnames ($hosts)"
+
+# Build initial section of masters script file.
+echo "# Build the host name tables" > $hostnames.fil
+echo "location_create://fabric#1:1?default_ops(private),fabric_name($fabric_name),dma_name($dma_name)" >> $hostnames.fil
+echo "location_create://${hostnames}.fabric#1:1?default_ops(private)" >> $hostnames.fil
+
+# Now create the list of hosts in master file and the initital scripts for the hosts
+host=1
+while [ $host -lt ${#hosts[*]} ]; do
+    echo ${hostnames[$host]} is ${hosts[$host]}
+    echo "location_create://${hostnames[$host]}.fabric#$[ host + 1]?default_ops(public)" >> $hostnames.fil
+
+    echo "# Register ourselves on the fabric" > ${hostnames[$host]}.fil
+    echo "location_find://fabric?default_ops(public),fabric_name($fabric_name),dma_name($dma_name),wait" >> ${hostnames[$host]}.fil
+    echo "location_find://${hostnames[$host]}.fabric?wait" >> ${hostnames[$host]}.fil
+    echo "" >> ${hostnames[$host]}.fil
+    echo "# Tell $hostnames we are ready" >> ${hostnames[$host]}.fil
+    echo "sync_wait://ready.${hostnames}.fabric?wait" >> ${hostnames[$host]}.fil
+    echo "" >> ${hostnames[$host]}.fil
+    echo "# Wait till ${hostnames} has created everything for us" >> ${hostnames[$host]}.fil
+    echo "sync_wait://go.${hostnames}.fabric?wait" >> ${hostnames[$host]}.fil
+    
+    host=$[ host + 1 ]
+done
+
+# Finish off the master file.
+echo "" >> $hostnames.fil
+echo "# Create the sync points we will need" >> $hostnames.fil
+echo "sync_create://go.${hostnames}.fabric#${#hosts[*]}" >> $hostnames.fil
+echo "sync_create://ready.${hostnames}.fabric#${#hosts[*]}" >> $hostnames.fil
+echo "" >> $hostnames.fil
+echo "# Wait for everyone to register on the fabric" >> $hostnames.fil
+echo "sync_wait://ready.${hostnames}.fabric" >> $hostnames.fil
+echo "" >> $hostnames.fil
+echo "# Now create everything needed by each host" >> $hostnames.fil
+
+# At this point in the scripts everyone is on the FusionIPC fabric with their names
+# So now continue master script to create all SMBs, binds and transfers
+
+host=0
+while [ $host -lt ${#hosts[*]} ]; do
+	echo "" >> ${hostnames}.fil
+	echo "# Create xfer engine, smbs and binds for ${hostnames[$host]}" >> ${hostnames}.fil
+	echo "xfer_create://xfer.${hostnames[$host]}.fabric" >> ${hostnames}.fil
+	echo "smb_create://${hostnames[$host]}_in.${hostnames[$host]}.fabric:4000" >> ${hostnames}.fil
+	echo "smb_create://${hostnames[$host]}_out.${hostnames[$host]}.fabric:4000" >> ${hostnames}.fil
+	if [ $host -gt 0 ] ; then
+	    echo "smb_create://${hostnames[$host]}_in.${hostnames}.fabric:4000" >> ${hostnames}.fil
+	    echo "smb_create://${hostnames[$host]}_out.${hostnames}.fabric:4000" >> ${hostnames}.fil
+	fi
+	echo "bind_create://xfer.${hostnames}.fabric:4000/${hostnames[$host]}_in.${hostnames[$host]}.fabric?event_name(go)=${hostnames[$host]}_out.${hostnames}.fabric?event_name(go)" >> ${hostnames}.fil
+	if [ $host -gt 0 ] ; then
+	    echo "bind_create://xfer.${hostnames[$host]}.fabric:4000/${hostnames[$host]}_in.${hostnames}.fabric?event_name(go)=${hostnames[$host]}_out.${hostnames[$host]}.fabric?event_name(go)" >> ${hostnames}.fil
+	fi
+	host=$[ host + 1 ]
+done
+
+# Now everything is in place for the hosts to continue their scripts to use
+# the events and smb's to create their maps and pipes. So have the master
+# release the sync.
+echo "" >> $hostnames.fil
+echo "# Now tell everyone we are done and they can continue" >> $hostnames.fil
+echo "sync_wait://go.${hostnames}.fabric" >> $hostnames.fil
+
+# Now continue hosts scripts to map their SMBs, find their events and run their
+# pipes.
+
+host=1
+while [ $host -lt ${#hosts[*]} ]; do
+	echo "" >> $hostnames.fil
+	echo "# Mmap ${hostnames[$host]}'s buffers" >> $hostnames.fil
+	echo "mmap_create://${hostnames[$host]}_in.$hostnames.fabric?map_name(${hostnames[$host]}_in)" >> $hostnames.fil
+	echo "mmap_create://${hostnames[$host]}_out.$hostnames.fabric?map_name(${hostnames[$host]}_out)" >> $hostnames.fil
+
+	echo "" >> ${hostnames[$host]}.fil
+	echo "# Mmap our buffers" >> ${hostnames[$host]}.fil
+	echo "mmap_create://${hostnames[$host]}_in.${hostnames[$host]}.fabric?map_name(${hostnames[$host]}_in)" >> ${hostnames[$host]}.fil
+	echo "mmap_create://${hostnames[$host]}_out.${hostnames[$host]}.fabric?map_name(${hostnames[$host]}_out)" >> ${hostnames[$host]}.fil
+	echo "" >> ${hostnames[$host]}.fil
+	echo "# Find our events" >> ${hostnames[$host]}.fil
+	echo "event_find://go.${hostnames[$host]}.fabric" >> ${hostnames[$host]}.fil
+	if [ "x$dopipe" = "xyes" ] ; then
+	    echo "" >> ${hostnames[$host]}.fil
+	    echo "# Do our pipe" >> ${hostnames[$host]}.fil
+	    echo "pipe://${hostnames[$host]}_in<copy(go.${hostnames[$host]}.fabric)>${hostnames[$host]}_out" >> ${hostnames[$host]}.fil
+	fi
+	if [ "x$dounixpipe" = "xyes" ] ; then
+	    echo "" >> ${hostnames[$host]}.fil
+	    echo "# Do our pipe" >> ${hostnames[$host]}.fil
+	    echo "unix_pipe://copy go.${hostnames[$host]}.fabric <${hostnames[$host]}_in >${hostnames[$host]}_out" >> ${hostnames[$host]}.fil
+	fi
+	host=$[ host + 1 ]
+done
+
+echo "" >> ${hostnames}.fil
+echo "# Mmap our buffers" >> ${hostnames}.fil
+echo "mmap_create://${hostnames}_in.${hostnames}.fabric?map_name(${hostnames}_in)" >> ${hostnames}.fil
+echo "mmap_create://${hostnames}_out.${hostnames}.fabric?map_name(${hostnames}_out)" >> ${hostnames}.fil
+echo "" >> ${hostnames}.fil
+echo "# Find our event" >> ${hostnames}.fil
+echo "event_find://go.${hostnames}.fabric" >> ${hostnames}.fil
+# Now the piece de la resistance...
+if [ "x$dopipe" = "xyes" ] ; then
+    outnamea=(${hostnames[*]/%/_out})
+    outnames=${outnamea[*]/#/>}
+    innamea=(${hostnames[*]/%/_in})
+    innames=${innamea[*]/%/<}
+    echo "" >> ${hostnames}.fil
+    echo "# Do our pipe" >> ${hostnames}.fil
+    echo "pipe://${innames// /}copy(go.$hostnames.fabric)${outnames// /}" >> $hostnames.fil
+fi
+if [ "x$dounixpipe" = "xyes" ] ; then
+    outnamea=(${hostnames[*]/%/_out})
+    innamea=(${hostnames[*]/%/_in})
+    echo "" >> ${hostnames}.fil
+    echo "# Do our pipe" >> ${hostnames}.fil
+    echo "unix_pipe://copy go.$hostnames.fabric ${innamea[*]/#/<} ${outnamea[*]/#/>}" >> $hostnames.fil
+fi
+
+# Now distribte the host script files to each host in turn and run it there.
+host=0
+while [ $host -lt ${#hosts[*]} ]; do
+	if [ "x$dodist" = "xyes" ] ; then
+	    scp "${hostnames[$host]}.fil" "${user[$host]}@${hosts[$host]}:${hostnames[$host]}.fil"
+	fi
+	# This will need to run as background cos it sync_waits
+	if [ "x$doexec" = "xyes" ] ; then
+	    xterm -e ssh ${user[$host]}@${hosts[$host]} "frmwrk -f ${hostnames[$host]}.fil ; bash -i" &
+	fi
+	host=$[ host + 1 ]
+done
+    
