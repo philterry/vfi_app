@@ -23,7 +23,8 @@ static int count = 0;
 int get_inputs(void **s, char **command)
 {
 	struct {char **inputs; int inputs_num;} *input = *s;
-	*command = *(input->inputs++);
+	*command = *(input->inputs);
+	*(input->inputs++) = NULL;	// ensuring that it will not get freed twice
 	return input->inputs_num--;
 }
 
